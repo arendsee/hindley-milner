@@ -1,7 +1,6 @@
 module Main where
 
 import Lib
-import qualified Control.Monad.State as MS
 
 -- x
 e0 = V "foo"
@@ -20,8 +19,8 @@ e4 = L "x" (A (V "f") (V "y")) (A (V "h") (V "x"))
 
 main :: IO ()
 main = do
-  print $ MS.evalState (inferTypes e0) initJState
-  print $ MS.evalState (inferTypes e1) initJState
-  print $ MS.evalState (inferTypes e2) initJState
-  print $ MS.evalState (inferTypes e3) initJState
-  print $ MS.evalState (inferTypes e4) initJState
+  print $ inferTypes e0
+  print $ inferTypes e1
+  print $ inferTypes e2
+  print $ inferTypes e3
+  print $ inferTypes e4

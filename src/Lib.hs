@@ -1,11 +1,6 @@
 module Lib (
-    MonoType(..)
-  , PolyType(..)
+    inferTypes
   , RawExpr(..)
-  , Expr(..)
-  , inferTypes
-  , newvar
-  , initJState
 ) where
 
 import qualified Data.Set as S
@@ -73,19 +68,23 @@ newvar = do
   MS.put (s {index = index s + 1})
   return v
 
-inferTypes :: RawExpr -> J Expr
-inferTypes (V n) = newvar |>> EVar n
-inferTypes (A e1 e2) = do
+-- Recursively assign each expression to a unique type variable
+inst :: RawExpr -> J Expr
+inst (V n) = newvar |>> EVar n
+inst (A e1 e2) = do
   t' <- newvar
-  e1' <- inferTypes e1
-  e2' <- inferTypes e2
+  e1' <- inst e1
+  e2' <- inst e2
   return $ Appl e1' e2' t'
-inferTypes (S n e) = do
+inst (S n e) = do
   t' <- newvar
-  e' <- inferTypes e
+  e' <- inst e
   return $ Abst n e' t'
-inferTypes (L n e1 e2) = do
+inst (L n e1 e2) = do
   t' <- newvar
-  e1' <- inferTypes e1
-  e2' <- inferTypes e2
+  e1' <- inst e1
+  e2' <- inst e2
   return $ Let n e1' e2' t'
+
+inferTypes :: RawExpr -> Expr
+inferTypes e = MS.evalState (inst e) initJState
