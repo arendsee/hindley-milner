@@ -1,6 +1,7 @@
 module Main where
 
 import Lib
+import Pretty
 
 -- x
 e0 = V "foo"
@@ -20,12 +21,12 @@ e4 = L "x" (A (V "f") (V "y")) (A (V "h") (V "x"))
 main :: IO ()
 main = do
   putStr "x ==> "
-  print $ inferTypes e0
+  putStrLn . pretty $ inferTypes e0
   putStr "foo x ==> "
-  print $ inferTypes e1
+  putStrLn . pretty $ inferTypes e1
   putStr "foo x y ==> "
-  print $ inferTypes e2
+  putStrLn . pretty $ inferTypes e2
   putStr "\\x -> y x x ==> "
-  print $ inferTypes e3
+  putStrLn . pretty $ inferTypes e3
   putStr "let x = f y in h x ==> "
-  print $ inferTypes e4
+  putStrLn . pretty $ inferTypes e4
