@@ -11,12 +11,12 @@ type Name = String
 
 data Type
   = TVar Name 
-  | TArr Type Type
+  | TLam Type Type
   deriving(Show, Eq, Ord)
 
 function :: Type -> Type -> Type
-function t1 t2 = t1 `TArr` (TVar "->") `TArr` t2
+function t1 t2 = t1 `TLam` (TVar "->") `TLam` t2
 
 fromFunction :: Type -> Maybe (Type, Type)
-fromFunction (t1 `TArr` (TVar "->") `TArr` t2) = Just (t1, t2)
+fromFunction (t1 `TLam` (TVar "->") `TLam` t2) = Just (t1, t2)
 fromFunction _ = Nothing

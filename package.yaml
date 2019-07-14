@@ -13,6 +13,11 @@ dependencies:
 - base >= 4.7 && < 5
 - containers
 - mtl
+- prettyprinter
+- prettyprinter-ansi-terminal
+
+default-extensions:
+  - OverloadedStrings
 
 library:
   source-dirs: src

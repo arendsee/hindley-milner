@@ -1,20 +1,34 @@
-module Pretty where
+module Pretty (
+  prettyTerm
+) where
 
 import TypedExpr
 import Type
 import Expr
 
-class Pretty a where
-  pretty :: a -> String
+import Data.Text.Prettyprint.Doc
+import Data.Text.Prettyprint.Doc.Render.Terminal
+import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
 
-instance Pretty TypedExpr where
-  pretty (EVar n t) = n ++ ":" ++ pretty t
-  pretty (EApp e1 e2 t) = "(" ++ pretty e1 ++ " " ++ pretty e2 ++ "):" ++ pretty t
-  pretty (EArr (Arg n _) e t) = "(\\" ++ n ++ " . " ++ pretty e ++ "):" ++ pretty t 
-  pretty (ELet n e1 e2 t) = "(let " ++ n ++ " = " ++ pretty e1 ++ " in " ++ pretty e2 ++ ":):" ++ pretty t
+typeStyle = SetAnsiStyle {
+      ansiForeground  = Just (Vivid, Green) -- ^ Set the foreground color, or keep the old one.
+    , ansiBackground  = Nothing             -- ^ Set the background color, or keep the old one.
+    , ansiBold        = Nothing             -- ^ Switch on boldness, or don’t do anything.
+    , ansiItalics     = Nothing             -- ^ Switch on italics, or don’t do anything.
+    , ansiUnderlining = Just Underlined     -- ^ Switch on underlining, or don’t do anything.
+  } 
+
+cast :: Pretty a => a -> Doc AnsiStyle -> Doc AnsiStyle
+cast t d = d <> ":" <> (annotate typeStyle (pretty t))
+
+prettyTerm :: TypedExpr -> Doc AnsiStyle
+prettyTerm (EVar n t) = cast t (pretty n)
+prettyTerm (EApp e1 e2 t) = cast t . parens $ prettyTerm e1 <+> prettyTerm e2
+prettyTerm (ELam (Arg n _) e t) = cast t . parens . hsep $  ["\\", pretty n, ".", prettyTerm e]
+prettyTerm (ELet n e1 e2 t) = cast t . parens . hsep $ ["let", pretty n, "=", prettyTerm e1, "in", prettyTerm e2]
 
 instance Pretty Type where
-  pretty (TVar n) = n
-  pretty t@(TArr t1 t2) = case fromFunction t of
-    Just (a, b) -> "(" ++ pretty a ++ " -> " ++ pretty b ++ ")"
-    Nothing -> "(" ++ pretty t1 ++ " " ++ pretty t2 ++ ")"
+  pretty (TVar n) = pretty n
+  pretty t@(TLam t1 t2) = case fromFunction t of
+    Just (a, b) -> parens $ pretty a <+> "->" <+> pretty b
+    Nothing -> parens $ pretty t1 <+> pretty t2

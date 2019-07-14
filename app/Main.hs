@@ -3,6 +3,10 @@ module Main where
 import Lib
 import Pretty
 
+import Data.Text.Prettyprint.Doc (pretty, line, Doc)
+import Data.Text.Prettyprint.Doc.Util (putDocW)
+import Data.Text.Prettyprint.Doc.Render.Terminal (putDoc)
+
 -- x
 e0 = V "foo"
 
@@ -18,15 +22,15 @@ e3 = S "x" (A (A (V "y") (V "x")) (V "x"))
 -- let x = f y in h x
 e4 = L "x" (A (V "f") (V "y")) (A (V "h") (V "x"))
 
+writeType :: Expr -> Doc a -> IO ()
+writeType e d = do
+  putDocW 80 d
+  putDoc $ prettyTerm (inferTypes e) <> line
+
 main :: IO ()
 main = do
-  putStr "x ==> "
-  putStrLn . pretty $ inferTypes e0
-  putStr "foo x ==> "
-  putStrLn . pretty $ inferTypes e1
-  putStr "foo x y ==> "
-  putStrLn . pretty $ inferTypes e2
-  putStr "\\x -> y x x ==> "
-  putStrLn . pretty $ inferTypes e3
-  putStr "let x = f y in h x ==> "
-  putStrLn . pretty $ inferTypes e4
+  writeType e0 "x ==> "
+  writeType e1 "foo x ==> "
+  writeType e2 "foo x y ==> "
+  writeType e3 "\\x -> y x x ==> "
+  writeType e4 "let x = f y in h x ==> "
