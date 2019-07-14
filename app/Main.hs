@@ -22,15 +22,17 @@ e3 = S "x" (A (A (V "y") (V "x")) (V "x"))
 -- let x = f y in h x
 e4 = L "x" (A (V "f") (V "y")) (A (V "h") (V "x"))
 
-writeType :: Expr -> Doc a -> IO ()
-writeType e d = do
-  putDocW 80 d
+writeType :: Expr -> IO ()
+writeType e = do
+  putStrLn "================================="
+  putDoc $ pretty e <> line
+  putStrLn "---"
   putDoc $ prettyTerm (inferTypes e) <> line
 
 main :: IO ()
 main = do
-  writeType e0 "x ==> "
-  writeType e1 "foo x ==> "
-  writeType e2 "foo x y ==> "
-  writeType e3 "\\x -> y x x ==> "
-  writeType e4 "let x = f y in h x ==> "
+  writeType e0
+  writeType e1
+  writeType e2
+  writeType e3
+  writeType e4
