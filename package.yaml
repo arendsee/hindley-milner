@@ -18,6 +18,7 @@ dependencies:
 
 default-extensions:
   - OverloadedStrings
+  - FlexibleInstances
 
 library:
   source-dirs: src
