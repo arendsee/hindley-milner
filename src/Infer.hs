@@ -3,6 +3,8 @@ module Infer (
   , Type(..)
   , EVar(..)
   , TVar(..)
+  , TLiteral(..)
+  , Literal(..)
   , inferTypes
   , nullGamma
 ) where
@@ -94,7 +96,7 @@ pair v t = Subst $ Map.singleton v t
 lookupEnv :: Gamma -> EVar -> TVar -> (Subst, Type)
 lookupEnv (Gamma g) n x = case Map.lookup n g of
     (Just t) -> (pair x t, t)
-    Nothing -> error ("UnboundVariable: " ++ show n)
+    Nothing -> (pair x (TVar x), (TVar x))
 
 inferTypes :: Expr String -> [(String, Type)] -> Expr Type
 inferTypes e env = apply s (fmap TVar e')
