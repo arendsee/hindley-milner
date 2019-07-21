@@ -14,6 +14,7 @@ import qualified Data.Map as Map
 import Data.Bifunctor
 import qualified Control.Monad.State as MS
 import qualified Control.Monad.Except as ME
+import Debug.Trace (trace)
 
 newtype TVar = TV String deriving(Show, Ord, Eq)
 newtype EVar = EV String deriving(Show, Ord, Eq)
@@ -42,9 +43,9 @@ data TLiteral
   | TBool
   deriving(Show, Ord, Eq)
 
-newtype Subst = Subst (Map.Map TVar Type)
+newtype Subst = Subst (Map.Map TVar Type) deriving (Show, Ord, Eq)
 
-newtype Gamma = Gamma (Map.Map EVar Type)
+newtype Gamma = Gamma (Map.Map EVar Type) deriving (Show, Ord, Eq)
 
 class Substitutable a where
   apply :: Subst -> a -> a
@@ -56,10 +57,15 @@ instance Substitutable Gamma where
     f x = x
 
 instance Substitutable (Expr Type) where
-  apply (Subst s) = fmap f where
-    f :: Type -> Type
-    f t@(TVar v) = maybe t id (Map.lookup v s)
-    f x = x
+  apply s = fmap (apply s) where
+
+instance Substitutable Type where
+  apply s@(Subst m) t@(TVar v) = case Map.lookup v m of
+    Nothing -> t
+    (Just t'@(TVar _)) -> t'
+    (Just t') -> apply s t'
+  apply s (TArr t1 t2) = TArr (apply s t1) (apply s t2)
+  apply _ x@(TLit _) = x
 
 instance Functor Expr where
   fmap f (Var (EV s) t)          = Var (EV s) (f t)
@@ -113,7 +119,7 @@ inferTypes e env = apply s (fmap TVar e')
 unify :: Type -> Type -> Subst
 unify (TVar v) t = pair v t 
 unify t (TVar v) = pair v t 
-unify (TArr t11 t12) (TArr t21 t22) = compose (unify t11 t21) (unify t12 t22)
+unify (TLit t1) (TLit t2) | t1 == t2 = nullSubst
 unify t1 t2 = error $ "Cannot unify '" <> show t1 <> "' and '" <> show t2 <> "'"
 
 infer :: Gamma -> Expr TVar -> (Subst, Type)
@@ -128,20 +134,26 @@ infer g e = case e of
   --  Env |- e2 : t2
   --  -----------------------------------------------------
   --  Env |- e1 e2 : t2
-  App e1 e2 t' -> (s3, TVar t')
+  App e1 e2 t' -> (sf, tf)
     where
+      tv = TVar t'
       (s1, t1) = infer g e1
       (s2, t2) = infer (apply s1 g) e2
-      s3 = unify t1 (TArr t2 (TVar t'))
+      s3 = unify (apply s2 t1) (TArr t2 tv)
+      sf = s3 `compose` s2 `compose` s1
+      tf = apply s3 tv
 
   --  Env |- x : t'
   --  Env, x : t' |- e : t2
   --  -----------------------------------------------------
   --  Env |- \x -> e : t' -> t2
-  Lam n t1' e t2' -> (s2 `compose` (pair t2' tlam), tlam)
+  Lam n t1' e t2' -> (sf, tf)
     where
-      (s2, t2) = infer (extend n (TVar t2') g) e
-      tlam = TArr (TVar t1') t2 
+      tb = TVar t1'
+      g' = extend n tb g
+      (s1, t1) = infer g' e
+      tf = TArr (apply s1 tb) t1
+      sf = s1 `compose` (pair t2' tf)
 
   --  Env |- e1:t1
   --  Env, n:t1 |- e2:t'
@@ -156,8 +168,6 @@ infer g e = case e of
 
   Lit (PInt _) t' -> (pair t' (TLit TInt), TLit TInt)
   Lit (PBool _) t' -> (pair t' (TLit TBool), TLit TBool)
-
-
 
 
 {----------------------------------------------------------

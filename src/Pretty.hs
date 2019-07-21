@@ -16,9 +16,8 @@ instance Pretty EVar where
 
 instance Pretty Type where
   pretty (TVar n) = pretty n
-  pretty (TArr t1 t2) = parens $ f t1 <+> "->" <+> f t2 where
-    f (TVar x) = pretty x
-    f t = parens (pretty t)
+  pretty (TArr t1@(TArr _ _) t2) = parens (pretty t1) <+> "->" <+> pretty t2
+  pretty (TArr t1 t2) = pretty t1 <+> "->" <+> pretty t2
   pretty (TLit l) = pretty l
 
 instance Pretty TLiteral where
@@ -62,7 +61,7 @@ prettyTerm (App e1@(Var _ _) e2@(Var _ _) t) = pcast t $ prettyTerm e1 <+> prett
 prettyTerm (App e1@(Var _ _) e2 t) = pcast t $ prettyTerm e1 <+> parens (prettyTerm e2)
 prettyTerm (App e1 e2@(Var x _) t) = pcast t $ prettyTerm e1 <+> prettyTerm e2
 prettyTerm (App e1 e2 t) = pcast t $ parens (prettyTerm e1) <+> parens (prettyTerm e2)
-prettyTerm (Lam (EV n) _ e t) = pcast t $ "\\" <+> pretty n <+> "->" <+> prettyTerm e
+prettyTerm (Lam (EV n) t1 e t2) = pcast t2 $ "\\" <+> cast t1 (pretty n) <+> "->" <+> prettyTerm e
 prettyTerm (Let (EV n) _ e1 e2 t)
   =  "_ ::" <+> prettyType t <> line
   <> nest 4 (vsep ["let" <+> pretty n <+> "=", prettyTerm e1]) <> line
