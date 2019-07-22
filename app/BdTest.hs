@@ -4,12 +4,14 @@ module BdTest
   ) where
 
 import BD.Infer
+import BD.Parser
 
 showExpr :: String -> IO ()
 showExpr x = do
   putStrLn $ "----------------------------------------------------------"
   putStrLn x
   print $ readExpr x
+  print $ infer emptyContext (readExpr x)
 
 runBdTest :: IO ()
 runBdTest = do
