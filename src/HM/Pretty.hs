@@ -1,8 +1,8 @@
-module Pretty (
+module HM.Pretty (
   prettyTerm
 ) where
 
-import Infer 
+import HM.Infer 
 
 import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.Terminal

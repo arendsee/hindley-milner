@@ -1,4 +1,4 @@
-module Infer ( 
+module HM.Infer ( 
     Expr(..)
   , Type(..)
   , EVar(..)

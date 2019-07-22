@@ -1,4 +1,4 @@
-name:                hindley-milner
+name:                inference
 version:             0.0.0
 github:              "arendsee/hindley-milner"
 license:             MIT
@@ -15,6 +15,7 @@ dependencies:
 - mtl
 - prettyprinter
 - prettyprinter-ansi-terminal
+- parsec
 
 default-extensions:
   - OverloadedStrings
@@ -24,7 +25,7 @@ library:
   source-dirs: src
 
 executables:
-  hindley-milner-exe:
+  inference:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -32,4 +33,4 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - hindley-milner
+    - inference

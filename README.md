@@ -1,1 +1,1 @@
-# hindley-milner
+# inference
