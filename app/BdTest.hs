@@ -10,8 +10,9 @@ showExpr :: String -> IO ()
 showExpr x = do
   putStrLn $ "----------------------------------------------------------"
   putStrLn x
-  print $ readExpr x
-  print $ infer emptyContext (readExpr x)
+  let e = readExpr x 
+  print $ e
+  print $ infer emptyContext e
 
 runBdTest :: IO ()
 runBdTest = do
@@ -19,3 +20,6 @@ runBdTest = do
   showExpr "f :: (Bool -> Bool) -> Bool -> Bool"
   showExpr "f (true :: Bool)"
   showExpr "borked (true :: Bool -> Bool)" -- bad annotation, this should fail
+  ------------------
+  showExpr "true"
+  showExpr "if true then false else true"
