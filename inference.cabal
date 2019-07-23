@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 40a80d06e5ea9b27b3f25d5445f7fd538b3be038f4f25ba00c35020c1359212a
+-- hash: d734c5e38675a921a4b44c071a8624220d86e9efb3aa2472de31cececeec9bd4
 
 name:           inference
 version:        0.0.0
@@ -25,11 +25,12 @@ source-repository head
 
 library
   exposed-modules:
-      BD.Data
-      BD.Infer
-      BD.Parser
-      HM.Infer
-      HM.Pretty
+      Bidirectional.Simple.Data
+      Bidirectional.Simple.Infer
+      Bidirectional.Simple.Parser
+      Bidirectional.Simple.Pretty
+      HindleyMilner.Infer
+      HindleyMilner.Pretty
   other-modules:
       Paths_inference
   hs-source-dirs:

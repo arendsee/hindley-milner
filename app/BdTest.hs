@@ -3,16 +3,21 @@ module BdTest
     runBdTest
   ) where
 
-import BD.Infer
-import BD.Parser
+import Bidirectional.Simple.Infer
+import Bidirectional.Simple.Parser
+import Bidirectional.Simple.Pretty
+
+import Data.Text.Prettyprint.Doc
 
 showExpr :: String -> IO ()
 showExpr x = do
   putStrLn $ "----------------------------------------------------------"
   putStrLn x
   let e = readExpr x 
-  print $ e
-  print $ infer emptyContext e
+  print e
+  case infer emptyContext e of
+    Right t -> print $ "_ :: " <> pretty t
+    Left e -> print $ "ERROR" <+> pretty e
 
 runBdTest :: IO ()
 runBdTest = do

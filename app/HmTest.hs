@@ -3,8 +3,8 @@ module HmTest
     runHmTest
   ) where
 
-import HM.Infer as HM
-import HM.Pretty
+import HindleyMilner.Infer as HM
+import HindleyMilner.Pretty
 
 import Data.Text.Prettyprint.Doc (pretty, line, Doc)
 import Data.Text.Prettyprint.Doc.Util (putDocW)

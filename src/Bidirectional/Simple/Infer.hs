@@ -1,10 +1,10 @@
-module BD.Infer (
+module Bidirectional.Simple.Infer (
     infer
   , emptyContext
 ) where
 
-import BD.Data
-import BD.Parser
+import Bidirectional.Simple.Data
+import Bidirectional.Simple.Parser
 import qualified Data.Map as Map
 
 class Extendable a where

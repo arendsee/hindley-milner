@@ -1,6 +1,6 @@
-module BD.Parser (readExpr) where
+module Bidirectional.Simple.Parser (readExpr) where
 
-import BD.Data
+import Bidirectional.Simple.Data
 import Text.Parsec
 import Text.Parsec.Char
 import qualified Text.ParserCombinators.Parsec.Token as T

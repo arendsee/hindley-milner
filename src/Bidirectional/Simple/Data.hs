@@ -1,4 +1,4 @@
-module BD.Data
+module Bidirectional.Simple.Data
 (
     Expr(..)
   , EVar(..)
