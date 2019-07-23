@@ -1,13 +1,13 @@
-name:                inference
+name:                xi
 version:             0.0.0
-github:              "arendsee/hindley-milner"
+github:              "arendsee/smurference"
 license:             MIT
 author:              "Zebulun Arendsee"
 maintainer:          "zbwrnz@gmail.com"
 copyright:           "2019 Zebulun Arendsee"
 extra-source-files:
     - README.md
-description:         Please see the README on GitHub at <https://github.com/arendsee/hindley-milner#readme>
+description:         Please see the README on GitHub at <https://github.com/arendsee/xi#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -25,7 +25,7 @@ library:
   source-dirs: src
 
 executables:
-  inference:
+  xi:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -33,4 +33,4 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - inference
+    - xi
