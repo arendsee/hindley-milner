@@ -21,6 +21,18 @@ default-extensions:
   - OverloadedStrings
   - FlexibleInstances
 
+ghc-options:
+  - -Wall
+  - -Wcompat
+  - -fwarn-unused-binds
+  - -fwarn-unused-imports 
+  - -fwarn-tabs
+  - -fwarn-incomplete-uni-patterns
+  - -fwarn-incomplete-record-updates
+  - -fwarn-redundant-constraints
+  - -fno-warn-missing-signatures
+  - -fno-warn-unused-do-bind
+
 library:
   source-dirs: src
 
