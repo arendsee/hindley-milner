@@ -6,8 +6,7 @@ module HmTest
 import HindleyMilner.Infer as HM
 import HindleyMilner.Pretty
 
-import Data.Text.Prettyprint.Doc (pretty, line, Doc)
-import Data.Text.Prettyprint.Doc.Util (putDocW)
+import Data.Text.Prettyprint.Doc (pretty, line)
 import Data.Text.Prettyprint.Doc.Render.Terminal (putDoc)
 
 -- x
