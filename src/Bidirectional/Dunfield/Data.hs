@@ -8,7 +8,6 @@ module Bidirectional.Dunfield.Data
   , Gamma
   , GammaIndex(..)
   , cut
-  , newvar
   , (+>)
   , TypeError(..)
   , access2
@@ -18,6 +17,11 @@ module Bidirectional.Dunfield.Data
   , lookupE
   , throwError
   , runStack
+  -- * State manipulation
+  , depth
+  , incDepth
+  , decDepth
+  , newvar
 ) where
 
 import qualified Data.List as DL
@@ -29,18 +33,25 @@ import qualified Control.Monad.Writer as MW
 import qualified Control.Monad.Reader as MR
 
 type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s IO))) a
-type Stack a = GeneralStack [String] TypeError [String] Int a
+type Stack a = GeneralStack [String] TypeError [String] StackState a
 
 -- | currently I do nothing with the Reader and Writer monads, but I'm leaving
 -- them in for now since I will need them when I plug this all into Morloc.
 runStack :: Stack a -> IO (Either TypeError a)
 runStack e = do
-  ((e, _), _) <- MS.runStateT(MW.runWriterT(ME.runExceptT(MR.runReaderT e []))) 0
+  ((e, _), _) <- MS.runStateT(MW.runWriterT(ME.runExceptT(MR.runReaderT e []))) emptyState
   return e
 
 type Gamma = [GammaIndex]
 newtype EVar = EV String deriving(Show, Eq, Ord)
 newtype TVar = TV String deriving(Show, Eq, Ord)
+
+data StackState = StackState {
+      stateVar :: Int
+    , stateDepth :: Int
+  } deriving(Ord, Eq, Show)
+
+emptyState = StackState 0 0
 
 -- | A context, see Dunfield Figure 6
 data GammaIndex
@@ -133,7 +144,8 @@ lookupT v (_:gs) = lookupT v gs
 
 access1 :: Indexable a => a -> Gamma -> Maybe (Gamma, GammaIndex, Gamma)
 access1 gi gs = case DL.elemIndex (index gi) gs of
-  (Just i) -> Just (take (i-1) gs, gs !! i, drop (i+1) gs)
+  (Just 0) -> Just ([], head gs, tail gs)
+  (Just i) -> Just (take i gs, gs !! i, drop (i+1) gs)
   _ -> Nothing
 
 access2
@@ -161,12 +173,25 @@ accessWith2 f g lgi rgi gs = case access2 lgi rgi gs of
 
 newvar :: Stack Type
 newvar = do
-  i <- MS.get 
-  let v = newvars !! i
-  MS.put (i+1)
+  s <- MS.get 
+  let v = newvars !! stateVar s
+  MS.put $ s {stateVar = stateVar s + 1}
   return (ExistT $ TV v)
   where
     newvars = zipWith (\x y -> x ++ show y) (repeat "t") ([0..] :: [Integer])
+
+incDepth :: Stack ()
+incDepth = do
+  s <- MS.get
+  MS.put $ s {stateDepth = stateDepth s + 1 } 
+
+decDepth :: Stack ()
+decDepth = do
+  s <- MS.get
+  MS.put $ s {stateDepth = stateDepth s - 1 } 
+
+depth :: Stack Int
+depth = MS.gets stateDepth
 
 class Indexable a where
   index :: a -> GammaIndex
@@ -198,7 +223,7 @@ instance Pretty TypeError where
   pretty NonFunctionDerive  = "Derive should only be called on function applications"
   pretty UnboundVariable    = "Unbound variable"
   pretty OccursCheckFail    = "OccursCheckFail"
-  pretty EmptyCut           = "EmptyCut - cannot cut an empty list"
+  pretty EmptyCut           = "EmptyCut - probably a logic bug"
   pretty TypeMismatch       = "TypeMismatch"
   pretty (UnexpectedPattern e t) = "UnexpectedPattern: " <> pretty e <> "|" <> pretty t  
 
