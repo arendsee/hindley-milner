@@ -4,42 +4,43 @@ import Bidirectional.Dunfield.Data
 import Bidirectional.Dunfield.Parser
 import Control.Applicative ((<|>))
 import Control.Monad.Trans (liftIO)
+import Data.Text.Prettyprint.Doc
 
-run :: Show a => String -> [(String, String)] -> Stack a -> Stack a
+run :: Pretty a => Doc' -> [(Doc', Doc')] -> Stack a -> Stack a
 run s args x = do
   incDepth
   d <- depth
-  liftIO . putStrLn $ (take d $ repeat '>') <> " " <> s
+  liftIO . print $ pretty (take d $ repeat '>') <+> s
   mapM writeArg args
   output <- x
-  liftIO . putStrLn $ (take d $ repeat '<') <> " " <> s
+  liftIO . print $ pretty (take d $ repeat '<') <+> s
   decDepth
-  liftIO . putStrLn $ "  return: " <> show output
+  liftIO . print $ "  return:" <+> pretty output
   return output
 
-writeArg :: (String, String) -> Stack ()
+writeArg :: (Doc', Doc') -> Stack ()
 writeArg (name, arg) = do
-  liftIO . putStrLn $ "  " <> name <> ": " <> arg
+  liftIO . print $ "  " <> name <> ":" <+> arg
 
-runSubtype :: String -> Type -> Type -> Gamma -> Stack Gamma -> Stack Gamma
+runSubtype :: Doc' -> Type -> Type -> Gamma -> Stack Gamma -> Stack Gamma
 runSubtype s t1 t2 g x
-  = run ("subtype " <> s) [("t1", show t1), ("t2", show t2), ("g", show g)] x
+  = run ("subtype " <> s) [("t1", pretty t1), ("t2", pretty t2), ("g", pretty g)] x
 
-runInstantiate :: String -> Type -> Type -> Gamma -> Stack Gamma -> Stack Gamma
+runInstantiate :: Doc' -> Type -> Type -> Gamma -> Stack Gamma -> Stack Gamma
 runInstantiate s t1 t2 g x
-  = run ("instantiate " <> s) [("ta", show t1), ("tb", show t2), ("g", show g)] x
+  = run ("instantiate " <> s) [("ta", pretty t1), ("tb", pretty t2), ("g", pretty g)] x
 
-runInfer :: String -> Gamma -> Expr -> Stack (Gamma, Type) -> Stack (Gamma, Type)
+runInfer :: Doc' -> Gamma -> Expr -> Stack (Gamma, Type) -> Stack (Gamma, Type)
 runInfer s g e x
-  = run ("infer " <> s) [("g", show g), ("e", show e)] x
+  = run ("infer " <> s) [("g", pretty g), ("e", pretty e)] x
 
-runCheck :: String -> Gamma -> Type -> Expr -> Stack (Gamma, Type) -> Stack (Gamma, Type)
+runCheck :: Doc' -> Gamma -> Type -> Expr -> Stack (Gamma, Type) -> Stack (Gamma, Type)
 runCheck s g t e x
-  = run ("check " <> s) [("g", show g), ("t", show t), ("e", show e)] x
+  = run ("check " <> s) [("g", pretty g), ("t", pretty t), ("e", pretty e)] x
 
-runDerive :: String -> Gamma -> Expr -> Type -> Stack (Gamma, Type) -> Stack (Gamma, Type)
+runDerive :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type) -> Stack (Gamma, Type)
 runDerive s g e t x
-  = run ("derive " <> s) [("g", show g), ("e", show e), ("t", show t)] x
+  = run ("derive " <> s) [("g", pretty g), ("e", pretty e), ("t", pretty t)] x
 
 
 -- | substitute all appearances of a given variable with an existential

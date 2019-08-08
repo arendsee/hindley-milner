@@ -22,15 +22,21 @@ module Bidirectional.Dunfield.Data
   , incDepth
   , decDepth
   , newvar
+  -- * Pretty printing
+  , Doc'
 ) where
 
 import qualified Data.List as DL
-import Data.Text.Prettyprint.Doc
 import Control.Monad.Except (throwError)
 import qualified Control.Monad.Except as ME
 import qualified Control.Monad.State as MS
 import qualified Control.Monad.Writer as MW
 import qualified Control.Monad.Reader as MR
+import Data.Text.Prettyprint.Doc
+import Data.Text.Prettyprint.Doc.Render.Terminal
+import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
+
+type Doc' = Doc AnsiStyle
 
 type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s IO))) a
 type Stack a = GeneralStack [String] TypeError [String] StackState a
@@ -241,3 +247,10 @@ instance Pretty Expr where
   pretty (LamE (EV n) e) = "\\" <+> pretty n <+> "->" <+> pretty e
   pretty (AnnE e t) = pretty e <+> ":" <+> pretty t
   pretty (AppE e1 e2) = pretty e1 <+> pretty e2
+
+instance Pretty GammaIndex where 
+  pretty (VarG t) = pretty t
+  pretty (AnnG e t) = pretty (AnnE e t)
+  pretty (ExistG t) = "<" <> pretty t <> ">"
+  pretty (SolvedG v t) = "<" <> pretty v <> "> = " <> pretty t
+  pretty (MarkG t) = "#" <> pretty t
