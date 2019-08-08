@@ -17,6 +17,7 @@ module Bidirectional.Dunfield.Data
   , lookupT
   , lookupE
   , throwError
+  , runStack
 ) where
 
 import qualified Data.List as DL
@@ -25,10 +26,17 @@ import Control.Monad.Except (throwError)
 import qualified Control.Monad.Except as ME
 import qualified Control.Monad.State as MS
 import qualified Control.Monad.Writer as MW
-import qualified Control.Monad.Identity as MI
+import qualified Control.Monad.Reader as MR
 
-type GeneralStack e l s m a = ME.ExceptT e (MW.WriterT l (MS.StateT s m)) a
-type Stack a = GeneralStack TypeError [String] Int MI.Identity a
+type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s IO))) a
+type Stack a = GeneralStack [String] TypeError [String] Int a
+
+-- | currently I do nothing with the Reader and Writer monads, but I'm leaving
+-- them in for now since I will need them when I plug this all into Morloc.
+runStack :: Stack a -> IO (Either TypeError a)
+runStack e = do
+  ((e, _), _) <- MS.runStateT(MW.runWriterT(ME.runExceptT(MR.runReaderT e []))) 0
+  return e
 
 type Gamma = [GammaIndex]
 newtype EVar = EV String deriving(Show, Eq, Ord)
@@ -93,6 +101,8 @@ data TypeError
   | UnboundVariable
   | OccursCheckFail
   | EmptyCut
+  | TypeMismatch
+  | UnexpectedPattern Expr Type
   deriving(Show, Ord, Eq)
 
 (+>) :: Indexable a => Gamma -> a -> Gamma
@@ -189,6 +199,8 @@ instance Pretty TypeError where
   pretty UnboundVariable    = "Unbound variable"
   pretty OccursCheckFail    = "OccursCheckFail"
   pretty EmptyCut           = "EmptyCut - cannot cut an empty list"
+  pretty TypeMismatch       = "TypeMismatch"
+  pretty (UnexpectedPattern e t) = "UnexpectedPattern: " <> pretty e <> "|" <> pretty t  
 
 instance Pretty Type where
   pretty UniT = "1"

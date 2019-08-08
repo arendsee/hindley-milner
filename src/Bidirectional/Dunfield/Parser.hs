@@ -29,10 +29,10 @@ readExpr s = case parse (pExpr <* eof) "" s of
 pExpr :: Parser Expr
 pExpr
   =   try pUni
-  <|> parens pExpr
-  <|> pLam
   <|> try pAnn
   <|> try pApp
+  <|> parens pExpr
+  <|> pLam
   <|> pVar
 
 pUni :: Parser Expr
@@ -48,7 +48,7 @@ pAnn = do
 pApp :: Parser Expr
 pApp = do
   e1 <- parens pExpr <|> pVar
-  e2 <- parens pExpr <|> pVar
+  e2 <- parens pExpr <|> try pUni <|> pVar
   return (AppE e1 e2)
 
 pLam :: Parser Expr
