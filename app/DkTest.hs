@@ -31,4 +31,4 @@ runDkTest = do
   -- simple functions
   showExpr False "(\\x -> True)"
   showExpr False "(\\x -> True) 42"
-  -- showExpr True "(\\x -> (\\y -> True) x) 42"
+  showExpr False "(\\x -> (\\y -> True) x) 42"

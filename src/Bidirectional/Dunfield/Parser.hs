@@ -100,8 +100,8 @@ pType :: Parser Type
 pType
   = try pFunT
   <|> parens pType
+  <|> try pForAllT
   <|> pVarT
-  <|> pForAllT
 
 pFunT :: Parser Type
 pFunT = do

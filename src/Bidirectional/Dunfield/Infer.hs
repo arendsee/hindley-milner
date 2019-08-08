@@ -175,10 +175,10 @@ instantiate ta@(ExistT _) tb@(Forall v2 t2) g1 = runInstantiate "InstLAllR" ta t
 instantiate ta@(ExistT v1) tb@(ExistT v2) g1 = runInstantiate "Inst[LR]Reach" ta tb g1 $ do
   case access2 ta tb g1 of
     -- InstLReach
-    (Just (ls, x, ms, _, rs)) -> return $ ls <> (x:ms) <> (SolvedG v2 ta:rs)
+    (Just (ls, _, ms, x, rs)) -> return $ ls <> (SolvedG v2 ta:ms) <> (x:rs)
     Nothing -> case access2 tb ta g1 of
       -- InstRReach
-      (Just (ls, x, ms, _, rs)) -> return $ ls <> (x:ms) <> (SolvedG v1 tb:rs)
+      (Just (ls, _, ms, x, rs)) -> return $ ls <> (SolvedG v1 tb:ms) <> (x:rs)
       Nothing -> throwError UnknownError
 
 -- ==== Right rules: A <: Eb ==================================================
@@ -186,7 +186,7 @@ instantiate ta@(ExistT v1) tb@(ExistT v2) g1 = runInstantiate "Inst[LR]Reach" ta
 --  g2 |- [g2]A2 <=: Ea2 -| g3
 -- ----------------------------------------- InstRArr
 --  g1[Ea] |- A1 -> A2 <=: Ea -| g3
-instantiate ta@(FunT t1 t2) tb@(ExistT v) g1 = runInstantiate "InstRSolve" ta tb g1 $ do
+instantiate ta@(FunT t1 t2) tb@(ExistT v) g1 = runInstantiate "InstRArr" ta tb g1 $ do
   ea1 <- newvar
   ea2 <- newvar
   g2 <- instantiate ea1 t1 $ g1 +> ea2 +> ea1 +> SolvedG v (FunT ea1 ea2)
