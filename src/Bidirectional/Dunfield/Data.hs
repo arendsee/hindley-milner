@@ -24,6 +24,8 @@ module Bidirectional.Dunfield.Data
   , newvar
   -- * Pretty printing
   , Doc'
+  -- * Config handling
+  , verbose
 ) where
 
 import qualified Data.List as DL
@@ -39,13 +41,13 @@ import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
 type Doc' = Doc AnsiStyle
 
 type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s IO))) a
-type Stack a = GeneralStack [String] TypeError [String] StackState a
+type Stack a = GeneralStack StackConfig TypeError [String] StackState a
 
 -- | currently I do nothing with the Reader and Writer monads, but I'm leaving
 -- them in for now since I will need them when I plug this all into Morloc.
-runStack :: Stack a -> IO (Either TypeError a)
-runStack e = do
-  ((e, _), _) <- MS.runStateT(MW.runWriterT(ME.runExceptT(MR.runReaderT e []))) emptyState
+runStack :: Stack a -> Bool -> IO (Either TypeError a)
+runStack e verbose = do
+  ((e, _), _) <- MS.runStateT(MW.runWriterT(ME.runExceptT(MR.runReaderT e (StackConfig verbose)))) emptyState
   return e
 
 type Gamma = [GammaIndex]
@@ -56,8 +58,14 @@ data StackState = StackState {
       stateVar :: Int
     , stateDepth :: Int
   } deriving(Ord, Eq, Show)
-
 emptyState = StackState 0 0
+
+data StackConfig = StackConfig {
+      configVerbose :: Bool  
+  }
+
+verbose :: Stack Bool
+verbose = MR.asks configVerbose
 
 -- | A context, see Dunfield Figure 6
 data GammaIndex
@@ -85,6 +93,8 @@ data Expr
   -- ^ (e e)
   | AnnE Expr Type
   -- ^ (e : A)
+  | IntE Integer | NumE Double | LogE Bool | StrE String
+  -- ^ primitives
   deriving(Show, Ord, Eq)
 
 -- | Types, see Dunfield Figure 6
@@ -244,9 +254,13 @@ instance Pretty Type where
 instance Pretty Expr where
   pretty UniE = "()"
   pretty (VarE (EV s)) = pretty s
-  pretty (LamE (EV n) e) = "\\" <+> pretty n <+> "->" <+> pretty e
+  pretty (LamE (EV n) e) = "\\" <> pretty n <+> "->" <+> pretty e
   pretty (AnnE e t) = pretty e <+> ":" <+> pretty t
   pretty (AppE e1 e2) = pretty e1 <+> pretty e2
+  pretty (IntE x) = pretty x
+  pretty (NumE x) = pretty x
+  pretty (StrE x) = dquotes (pretty x)
+  pretty (LogE x) = pretty x
 
 instance Pretty GammaIndex where 
   pretty (VarG t) = pretty t

@@ -6,7 +6,7 @@ import qualified Text.ParserCombinators.Parsec.Token as T
 import qualified Text.Parsec.Language as L
 
 lexer = T.makeTokenParser (L.emptyDef {
-      T.reservedNames = ["forall, UNIT"]
+      T.reservedNames = ["forall", "UNIT", "True", "False"]
     , T.reservedOpNames = ["::", "->", "\\", "."]
     , T.identStart = letter
     , T.identLetter = alphaNum
@@ -31,6 +31,10 @@ pExpr
   =   try pUni
   <|> try pAnn
   <|> try pApp
+  <|> try pStrE
+  <|> try pLogE
+  <|> try pNumE
+  <|> try pIntE
   <|> parens pExpr
   <|> pLam
   <|> pVar
@@ -48,8 +52,35 @@ pAnn = do
 pApp :: Parser Expr
 pApp = do
   e1 <- parens pExpr <|> pVar
-  e2 <- parens pExpr <|> try pUni <|> pVar
+  e2 <- parens pExpr
+     <|> try pStrE <|> try pLogE <|> try pNumE <|> try pIntE
+     <|> try pUni <|> pVar
   return (AppE e1 e2)
+
+pIntE :: Parser Expr
+pIntE = fmap IntE integer
+
+pLogE :: Parser Expr
+pLogE = pTrue <|> pFalse
+  where
+    pTrue = keyword "True" >> return (LogE True)
+    pFalse = keyword "False" >> return (LogE False)
+
+pStrE :: Parser Expr
+pStrE = do
+  _ <- char '"'
+  s <- many (noneOf ['"'])
+  _ <- char '"'
+  return (StrE s)
+
+pNumE :: Parser Expr
+pNumE = do
+  s <- option "" (string "-")
+  w <- many digit
+  _ <- char '.'
+  d <- many1 digit
+  let numStr = s ++ w ++ "." ++ d
+  return $ NumE (read numStr :: Double)
 
 pLam :: Parser Expr
 pLam = do

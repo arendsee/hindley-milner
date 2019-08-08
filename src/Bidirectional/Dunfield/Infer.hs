@@ -1,22 +1,25 @@
 module Bidirectional.Dunfield.Infer ( infer ) where
 
 import Bidirectional.Dunfield.Data
-import Bidirectional.Dunfield.Parser
-import Control.Applicative ((<|>))
 import Control.Monad.Trans (liftIO)
 import Data.Text.Prettyprint.Doc
 
 run :: Pretty a => Doc' -> [(Doc', Doc')] -> Stack a -> Stack a
 run s args x = do
-  incDepth
-  d <- depth
-  liftIO . print $ pretty (take d $ repeat '>') <+> s
-  mapM writeArg args
-  output <- x
-  liftIO . print $ pretty (take d $ repeat '<') <+> s
-  decDepth
-  liftIO . print $ "  return:" <+> pretty output
-  return output
+  isVerbose <- verbose
+  if isVerbose
+  then do
+    incDepth
+    d <- depth
+    liftIO . print $ pretty (take d $ repeat '>') <+> s
+    mapM writeArg args
+    output <- x
+    liftIO . print $ pretty (take d $ repeat '<') <+> s
+    decDepth
+    liftIO . print $ "  return:" <+> pretty output
+    return output
+  else
+    x
 
 writeArg :: (Doc', Doc') -> Stack ()
 writeArg (name, arg) = do
@@ -34,9 +37,9 @@ runInfer :: Doc' -> Gamma -> Expr -> Stack (Gamma, Type) -> Stack (Gamma, Type)
 runInfer s g e x
   = run ("infer " <> s) [("g", pretty g), ("e", pretty e)] x
 
-runCheck :: Doc' -> Gamma -> Type -> Expr -> Stack (Gamma, Type) -> Stack (Gamma, Type)
-runCheck s g t e x
-  = run ("check " <> s) [("g", pretty g), ("t", pretty t), ("e", pretty e)] x
+runCheck :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type) -> Stack (Gamma, Type)
+runCheck s g e t x
+  = run ("check " <> s) [("g", pretty g), ("e", pretty e), ("t", pretty t)] x
 
 runDerive :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type) -> Stack (Gamma, Type)
 runDerive s g e t x
@@ -61,7 +64,7 @@ apply :: Gamma -> Type -> Type
 -- [G]l = l
 apply _ UniT = UniT
 -- [G]a = a
-apply _ a@(VarT v) = a
+apply _ a@(VarT _) = a
 -- [G](A->B) = ([G]A -> [G]B)
 apply g (FunT a b) = FunT (apply g a) (apply g b)
 -- [G]Forall a.a = forall a. [G]a
@@ -141,17 +144,15 @@ subtype a@(ExistT v) b g = runSubtype "<:InstantiateL" a b g $ do
 subtype a b@(ExistT v) g = runSubtype "<:InstantiateR" a b g $ do
   occursCheck a v
   instantiate a b g 
+subtype a b g = runSubtype "<:con" a b g $ do
+  throwError SubtypeError 
+
 
 
 -- | Dunfield Figure 10 -- type-level structural recursion
 instantiate :: Type -> Type -> Gamma -> Stack Gamma
 
 -- ==== Left rules: Ea <: B ===================================================
---  g1 |- t
--- ----------------------------------------- instLSolve
---  g1,Ea,g2 |- Ea <=: t -| g1,Ea=t,g2
-instantiate ta@(ExistT v) tb@(VarT _) g1 = runInstantiate "instLSolve" ta tb g1 $ do
-  accessWith (const (SolvedG v tb)) ta g1
 --  g1[Ea2, Ea1, Ea=Ea1->Ea2] |- A1 <=: Ea1 -| g2
 --  g2 |- Ea2 <=: [g2]A2 -| g3
 -- ----------------------------------------- InstLArr
@@ -181,11 +182,6 @@ instantiate ta@(ExistT v1) tb@(ExistT v2) g1 = runInstantiate "Inst[LR]Reach" ta
       Nothing -> throwError UnknownError
 
 -- ==== Right rules: A <: Eb ==================================================
---  g1 |- t
--- ----------------------------------------- InstRSolve
---  g1,Ea,g2 |- t <=: Ea -| g1,Ea=t,g2
-instantiate ta@(VarT t) tb@(ExistT v) g1 = runInstantiate "InstRSolve" ta tb g1 $ do
-  accessWith (const (SolvedG v ta)) tb g1
 --  g1[Ea2,Ea1,Ea=Ea1->Ea2] |- Ea1 <=: A1 -| g2
 --  g2 |- [g2]A2 <=: Ea2 -| g3
 -- ----------------------------------------- InstRArr
@@ -205,39 +201,62 @@ instantiate ta@(Forall x b) tb@(ExistT _) g1 = runInstantiate "InstRSolve" ta tb
       tb                           -- Ea
       (g1 +> MarkG x +> ExistG x)  -- g1[Ea],>Eb,Eb
   >>= cut (MarkG x)
+--  g1 |- t
+-- ----------------------------------------- InstRSolve
+--  g1,Ea,g2 |- t <=: Ea -| g1,Ea=t,g2
+instantiate ta tb@(ExistT v) g1 = runInstantiate "InstRSolve" ta tb g1 $ do
+  accessWith (const (SolvedG v ta)) tb g1
+--  g1 |- t
+-- ----------------------------------------- instLSolve
+--  g1,Ea,g2 |- Ea <=: t -| g1,Ea=t,g2
+instantiate ta@(ExistT v) tb g1 = runInstantiate "instLSolve" ta tb g1 $ do
+  accessWith (const (SolvedG v tb)) ta g1
 -- bad
 instantiate t1 t2 g = runInstantiate "error" t1 t2 g $ do
   return g
 
 infer :: Gamma -> Expr -> Stack (Gamma, Type)
+-- handle primitives
+infer g e@(NumE _) = runInfer "Num=>" g e $ do
+  return (g, VarT (TV "Num"))
+infer g e@(IntE _) = runInfer "Int=>" g e $ do
+  return (g, VarT (TV "Int"))
+infer g e@(StrE _) = runInfer "Str=>" g e $ do
+  return (g, VarT (TV "Str"))
+infer g e@(LogE _) = runInfer "Log=>" g e $ do
+  return (g, VarT (TV "Bool"))
 --
 -- ----------------------------------------- 1l=>
 --  g |- () => 1 -| g
-infer g e@UniE = runInfer "1l" g e $ do
+infer g e@UniE = runInfer "1l=>" g e $ do
   return (g, UniT) 
 --  (x:A) in g
--- ----------------------------------------- Var
+-- ----------------------------=>------------- Var
 --  g |- x => A -| g
-infer g e@(VarE v) = runInfer "Var" g e $ do
+infer g e@(VarE _) = runInfer "Var" g e $ do
   case lookupE e g of
     (Just t) -> return (g, t)
     Nothing  -> throwError UnboundVariable
 --  g1,Ea,Eb,x:Ea |- e <= Eb -| g2,x:Ea,g3
 -- ----------------------------------------- -->I=>
 --  g1 |- \x.e => Ea -> Eb
-infer g1 e@(LamE v e2) = runInfer "LamE" g1 e $ do
+infer g1 e@(LamE v e2) = runInfer "-->I=>" g1 e $ do
   a <- newvar
   b <- newvar
   let ann = AnnG (VarE v) a
       g' = g1 +> a +> b +> ann
-  (g'', t) <- check g' b e2
-  g2 <- cut ann g''
-  return (g2, t)
+  (g'', t) <- check g' e2 b
+  case lookupE (VarE v) g'' of
+    (Just a') -> do
+      g2 <- cut ann g''
+      return (g2, FunT a' t)
+    Nothing -> throwError UnknownError
+
 --  g1 |- e1 => A -| g2
 --  g2 |- [g2]A o e2 =>> C -| g3
 -- ----------------------------------------- -->E
 --  g1 |- e1 e2 => C -| g3
-infer g1 e@(AppE e1 e2) = runInfer "AppE" g1 e $ do
+infer g1 e@(AppE e1 e2) = runInfer "-->E" g1 e $ do
   (g2, a) <- infer g1 e1
   derive g2 e2 (apply g2 a)
 --  g1 |- A
@@ -245,51 +264,53 @@ infer g1 e@(AppE e1 e2) = runInfer "AppE" g1 e $ do
 -- ----------------------------------------- Anno
 --  g1 |- (e:A) => A -| g2
 infer g e1@(AnnE e t) = runInfer "Anno" g e1 $ do
-  check g t e
+  check g e t
 
 
 -- | Pattern matches against each type
-check :: Gamma -> Type -> Expr -> Stack (Gamma, Type)
+check :: Gamma -> Expr -> Type -> Stack (Gamma, Type)
 --
 -- ----------------------------------------- 1l
 --  g |- () <= 1 -| g
-check g UniT UniE = runCheck "1l" g UniT UniE $ do
+check g UniE UniT = runCheck "1l" g UniE UniT  $ do
   return (g, UniT)
-check g UniT e = runCheck "1l-error" g UniT e $ do
+check g e UniT = runCheck "1l-error" g e UniT $ do
   throwError TypeMismatch
 --  g1,x:A |- e <= B -| g2,x:A,g3
 -- ----------------------------------------- -->I
 --  g1 |- \x.e <= A -> B -| g2
-check g r1@(FunT a b) r2@(LamE v e) = runCheck "-->I" g r1 r2 $ do
+check g r1@(LamE v e) r2@(FunT a b) = runCheck "-->I" g r1 r2 $ do
   -- define x:A
   let ann = AnnG (VarE v) a
   -- check that e has the expected output type
-  (g', t') <- check (g +> ann) b e
+  (g', t') <- check (g +> ann) e b
   -- ignore the trailing context and (x:A), since it is out of scope
   g2 <- cut ann g'
   return (g2, t')
 --  g1,x |- e <= A -| g2,x,g3
 -- ----------------------------------------- Forall.I
 --  g1 |- e <= Forall x.A -| g2
-check g1 r1@(Forall x a) e = runCheck "Forall.I" g1 r1 e $ do
-  (g', t') <- check (g1 +> VarG x) a e
+check g1 e r2@(Forall x a) = runCheck "Forall.I" g1 e r2 $ do
+  (g', t') <- check (g1 +> VarG x) e a
   g2 <- cut (VarG x) g'
   return (g2, t')
 --  g1 |- e => A -| g2
 --  g2 |- [g2]A <: [g2]B -| g3
 -- ----------------------------------------- Sub
 --  g1 |- e <= B -| g3
-check g1 b e = runCheck "Sub" g1 b e $ do
+check g1 e b = runCheck "Sub" g1 e b $ do
   (g2, a) <- infer g1 e
   g3 <- subtype (apply g2 a) (apply g2 b) g2
   return (g3, apply g3 a)
+
 
 derive :: Gamma -> Expr -> Type -> Stack (Gamma, Type)
 --  g1 |- e <= A -| g2
 -- ----------------------------------------- -->App
 --  g1 |- A->C o e =>> C -| g2
-derive g e t@(FunT a _) = runDerive "-->App" g e t $ do
-  check g a e
+derive g e t@(FunT a b) = runDerive "-->App" g e t $ do
+  (g', t) <- check g e a
+  return (g', apply g' b)
 --  g1,Ea |- [Ea/a]A o e =>> C -| g2
 -- ----------------------------------------- Forall App
 --  g1 |- Forall x.A o e =>> C -| g2
@@ -302,6 +323,6 @@ derive g e t'@(ExistT v) = runDerive "EaApp" g e t' $ do
   a <- newvar
   b <- newvar
   let g' = g +> a +> b +> SolvedG v (FunT a b)
-  check g' a e
+  check g' e a
 derive g e t = runDerive "unexpected" g e t $ do
   throwError NonFunctionDerive
