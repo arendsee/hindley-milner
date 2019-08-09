@@ -134,6 +134,7 @@ data TypeError
   | EmptyCut
   | TypeMismatch
   | UnexpectedPattern Expr Type
+  | ToplevelRedefinition
   deriving(Show, Ord, Eq)
 
 (+>) :: Indexable a => Gamma -> a -> Gamma
@@ -246,6 +247,7 @@ instance Pretty TypeError where
   pretty EmptyCut           = "EmptyCut - probably a logic bug"
   pretty TypeMismatch       = "TypeMismatch"
   pretty (UnexpectedPattern e t) = "UnexpectedPattern: " <> pretty e <> "|" <> pretty t  
+  pretty ToplevelRedefinition = "ToplevelRedefinition"
 
 instance Pretty Type where
   pretty UniT = "1"

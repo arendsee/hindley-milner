@@ -45,6 +45,8 @@ runDerive :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type) -> Stack (Gamm
 runDerive s g e t x
   = run ("derive " <> s) [("g", pretty g), ("e", pretty e), ("t", pretty t)] x
 
+generalize :: Gamma -> Type -> Stack Type
+generalize g t = return t -- STUB
 
 -- | substitute all appearances of a given variable with an existential
 -- [t/v]A
@@ -90,6 +92,12 @@ occursCheck (Forall v' t) v
 occursCheck (ExistT v') v
   | v' == v = throwError OccursCheckFail -- existentials count
   | otherwise = return v'
+
+occursCheckExpr :: Gamma -> EVar -> Stack EVar
+occursCheckExpr [] v = return v
+occursCheckExpr ((AnnG (VarE v') _):gs) v
+  | v' == v = throwError ToplevelRedefinition
+  | otherwise = occursCheckExpr gs v
 
 
 -- | type 1 is more polymorphic than type 2 (Dunfield Figure 9)
@@ -236,7 +244,10 @@ infer g e@(StrE _) = runInfer "Str=>" g e $ do
 infer g e@(LogE _) = runInfer "Log=>" g e $ do
   return (g, VarT (TV "Bool"))
 infer g e@(Statement v e1 e2) = runInfer "Statement=>" g e $ do
-  infer g e2 -- STUB
+  occursCheckExpr g v
+  (g', t1) <- infer g e1
+  t1' <- generalize g' t1
+  infer (g +> AnnG (VarE v) t1') e2
 
 --
 -- ----------------------------------------- 1l=>
