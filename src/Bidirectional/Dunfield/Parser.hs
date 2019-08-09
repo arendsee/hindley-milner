@@ -125,7 +125,10 @@ pVarT = fmap (VarT . TV) name
 pForAllT :: Parser Type
 pForAllT = do
   _ <- keyword "forall"
-  v <- name
+  vs <- many1 name
   _ <- op "."
   t <- pType
-  return $ Forall (TV v) t
+  return (curry vs t)
+  where
+    curry [] e' = e'
+    curry (v:vs') e' =  Forall (TV v) (curry vs' e') 
