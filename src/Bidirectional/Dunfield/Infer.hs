@@ -113,12 +113,14 @@ subtype a@(ExistT a1) b@(ExistT a2) g = runSubtype "<:Exvar" a b g $ do
   if (a1 == a2)
   then return g
   else instantiate a b g
---  g1 |- A1 <: B1 -| g2
+--  g1 |- B1 <: A1 -| g2
 --  g2 |- [g2]A2 <: [g2]B2 -| g3
 -- ----------------------------------------- <:-->
 --  g1 |- A1 -> A2 <: B1 -> B2 -| g3
 subtype x@(FunT a1 a2) y@(FunT b1 b2) g1 = runSubtype "<:-->" x y g1 $ do
-  g2 <- subtype a1 b1 g1
+  -- function subtypes are *contravariant* with respect to the input, that is,
+  -- the subtypes are reversed so we have b1<:a1 instead of a1<:b1.
+  g2 <- subtype b1 a1 g1
   subtype (apply g2 a2) (apply g2 b2) g2
 --  g1,>Ea,Ea |- [Ea/x]A <: B -| g2,>Ea,g3
 -- ----------------------------------------- <:ForallL
