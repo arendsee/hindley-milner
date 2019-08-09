@@ -274,7 +274,8 @@ infer g1 e@(AppE e1 e2) = runInfer "-->E" g1 e $ do
 -- ----------------------------------------- Anno
 --  g1 |- (e:A) => A -| g2
 infer g e1@(AnnE e t) = runInfer "Anno" g e1 $ do
-  check g e t
+  (g, t') <- check g e t
+  return (g, t)
 
 
 -- | Pattern matches against each type

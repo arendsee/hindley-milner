@@ -14,7 +14,9 @@ showExpr verbose x = do
   putStrLn $ "----------------------------------------------------------"
   putStrLn x
   let e = readExpr x 
-  print e
+  if verbose
+  then print e
+  else return ()
   x <- runStack (infer [] e) verbose
   case x of
     Right (_, t) -> print $ "_ :: " <> pretty t
@@ -34,4 +36,6 @@ runDkTest = do
   showExpr False "(\\x -> (\\y -> True) x) 42"  -- expect: Bool
   showExpr False "(\\x -> (\\y -> x) True) 42"  -- expect: Int
   showExpr False "(\\x y->x) 1 True"
-  showExpr True  "(\\x y -> x) :: forall a b . a -> b -> a"
+  showExpr False "(\\x y -> x) :: forall a b . a -> b -> a"
+  showExpr False "((\\x -> x) :: forall a . a -> a) True"
+  showExpr False "((\\x y -> x) :: forall a b . a -> b -> a) True"
