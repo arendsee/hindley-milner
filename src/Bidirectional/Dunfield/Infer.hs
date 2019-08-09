@@ -154,7 +154,6 @@ subtype a b g = runSubtype "<:con" a b g $ do
 -- | Dunfield Figure 10 -- type-level structural recursion
 instantiate :: Type -> Type -> Gamma -> Stack Gamma
 
--- ==== Left rules: Ea <: B ===================================================
 --  g1[Ea2, Ea1, Ea=Ea1->Ea2] |- A1 <=: Ea1 -| g2
 --  g2 |- Ea2 <=: [g2]A2 -| g3
 -- ----------------------------------------- InstLArr
@@ -162,28 +161,13 @@ instantiate :: Type -> Type -> Gamma -> Stack Gamma
 instantiate ta@(ExistT v) tb@(FunT t1 t2) g1 = runInstantiate "instLArr" ta tb g1 $ do
   ea1 <- newvar
   ea2 <- newvar
-  g2 <- instantiate t1 ea1 (g1 +> ea2 +> ea1 +> SolvedG v (FunT ea1 ea2))
-  g3 <- instantiate ea2 (apply g2 t2) g2
-  return g3
---
--- ----------------------------------------- InstLAllR
---
-instantiate ta@(ExistT _) tb@(Forall v2 t2) g1 = runInstantiate "InstLAllR" ta tb g1 $ do
-  instantiate ta t2 (g1 +> VarG v2) >>= cut (VarG v2)
+  g2 <- case access1 ta g1 of
+    Just (rs, _, ls) -> return $ rs ++ [SolvedG v (FunT ea1 ea2), index ea1, index ea2] ++ ls
+    Nothing -> throwError UnknownError
+  g3 <- instantiate t1 ea1 g2
+  g4 <- instantiate ea2 (apply g3 t2) g3
+  return g4
 
--- ==== Symmetric rule: Ea <: Eb ==============================================
--- InstLReach or instRReach -- each rule eliminates an existential
--- Replace the rightmost with leftmost (G[a][b] --> L,a,M,b=a,R)
-instantiate ta@(ExistT v1) tb@(ExistT v2) g1 = runInstantiate "Inst[LR]Reach" ta tb g1 $ do
-  case access2 ta tb g1 of
-    -- InstLReach
-    (Just (ls, _, ms, x, rs)) -> return $ ls <> (SolvedG v2 ta:ms) <> (x:rs)
-    Nothing -> case access2 tb ta g1 of
-      -- InstRReach
-      (Just (ls, _, ms, x, rs)) -> return $ ls <> (SolvedG v1 tb:ms) <> (x:rs)
-      Nothing -> throwError UnknownError
-
--- ==== Right rules: A <: Eb ==================================================
 --  g1[Ea2,Ea1,Ea=Ea1->Ea2] |- Ea1 <=: A1 -| g2
 --  g2 |- [g2]A2 <=: Ea2 -| g3
 -- ----------------------------------------- InstRArr
@@ -191,9 +175,33 @@ instantiate ta@(ExistT v1) tb@(ExistT v2) g1 = runInstantiate "Inst[LR]Reach" ta
 instantiate ta@(FunT t1 t2) tb@(ExistT v) g1 = runInstantiate "InstRArr" ta tb g1 $ do
   ea1 <- newvar
   ea2 <- newvar
-  g2 <- instantiate ea1 t1 $ g1 +> ea2 +> ea1 +> SolvedG v (FunT ea1 ea2)
-  g3 <- instantiate (apply g2 t2) ea2 g2
-  return g3
+  g2 <- case access1 tb g1 of
+    Just (rs, _, ls) -> return $ rs ++ [SolvedG v (FunT ea1 ea2), index ea1, index ea2] ++ ls
+    Nothing -> throwError UnknownError
+  g3 <- instantiate t1 ea1 g2
+  g4 <- instantiate ea2 (apply g3 t2) g3
+  return g4
+
+--
+-- ----------------------------------------- InstLAllR
+--
+instantiate ta@(ExistT _) tb@(Forall v2 t2) g1 = runInstantiate "InstLAllR" ta tb g1 $ do
+  instantiate ta t2 (g1 +> VarG v2) >>= cut (VarG v2)
+
+-- InstLReach or instRReach -- each rule eliminates an existential
+-- Replace the rightmost with leftmost (G[a][b] --> L,a,M,b=a,R)
+-- WARNING: be careful here, since the implementation adds to the front and the
+-- formal syntax adds to the back. Don't change anything in the function unless
+-- you really know what you are doing and have tests to confirm it.
+instantiate ta@(ExistT v1) tb@(ExistT v2) g1 = runInstantiate "Inst[LR]Reach" ta tb g1 $ do
+  case access2 ta tb g1 of
+    -- InstLReach
+    (Just (ls, _, ms, x, rs)) -> return $ ls <> (SolvedG v1 tb:ms) <> (x:rs)
+    Nothing -> case access2 tb ta g1 of
+      -- InstRReach
+      (Just (ls, _, ms, x, rs)) -> return $ ls <> (SolvedG v2 ta:ms) <> (x:rs)
+      Nothing -> throwError UnknownError
+
 --  g1[Ea],>Eb,Eb |- [Eb/x]B <=: Ea -| g2,>Eb,g3
 -- ----------------------------------------- InstRAllL
 --  g1[Ea] |- Forall x. B <=: Ea -| g2

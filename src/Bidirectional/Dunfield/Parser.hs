@@ -51,11 +51,15 @@ pAnn = do
 
 pApp :: Parser Expr
 pApp = do
-  e1 <- parens pExpr <|> pVar
-  e2 <- parens pExpr
+  f <- parens pExpr <|> pVar
+  es <- many1
+     $   parens pExpr
      <|> try pStrE <|> try pLogE <|> try pNumE <|> try pIntE
      <|> try pUni <|> pVar
-  return (AppE e1 e2)
+  return $ applyMany f es where
+    applyMany f' [] = f' -- this shouldn't happen
+    applyMany f' [e] = AppE f' e
+    applyMany f' (e:es') = applyMany (AppE f' e) es'
 
 pIntE :: Parser Expr
 pIntE = fmap IntE integer
@@ -85,10 +89,13 @@ pNumE = do
 pLam :: Parser Expr
 pLam = do
   _ <- op "\\"
-  v <- pEVar
+  vs <- many1 pEVar
   _ <- op "->"
   e <- pExpr
-  return (LamE v e)
+  return (curry vs e)
+  where
+    curry [] e' = e'
+    curry (v:vs') e' = LamE v (curry vs' e') 
 
 pVar :: Parser Expr
 pVar = fmap VarE pEVar

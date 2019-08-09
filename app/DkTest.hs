@@ -31,4 +31,6 @@ runDkTest = do
   -- simple functions
   showExpr False "(\\x -> True)"
   showExpr False "(\\x -> True) 42"
-  showExpr False "(\\x -> (\\y -> True) x) 42"
+  showExpr False "(\\x -> (\\y -> True) x) 42"  -- expect: Bool
+  showExpr False "(\\x -> (\\y -> x) True) 42"  -- expect: Int
+  showExpr True "(\\x y->x) 1 True"

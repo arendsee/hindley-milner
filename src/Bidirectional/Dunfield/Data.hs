@@ -10,6 +10,7 @@ module Bidirectional.Dunfield.Data
   , cut
   , (+>)
   , TypeError(..)
+  , access1
   , access2
   , accessWith
   , accessWith2
@@ -17,6 +18,7 @@ module Bidirectional.Dunfield.Data
   , lookupE
   , throwError
   , runStack
+  , index
   -- * State manipulation
   , depth
   , incDepth
@@ -256,7 +258,7 @@ instance Pretty Expr where
   pretty (VarE (EV s)) = pretty s
   pretty (LamE (EV n) e) = "\\" <> pretty n <+> "->" <+> pretty e
   pretty (AnnE e t) = pretty e <+> ":" <+> pretty t
-  pretty (AppE e1 e2) = pretty e1 <+> pretty e2
+  pretty (AppE e1 e2) = parens (pretty e1) <+> pretty e2
   pretty (IntE x) = pretty x
   pretty (NumE x) = pretty x
   pretty (StrE x) = dquotes (pretty x)
