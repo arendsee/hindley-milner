@@ -235,6 +235,9 @@ infer g e@(StrE _) = runInfer "Str=>" g e $ do
   return (g, VarT (TV "Str"))
 infer g e@(LogE _) = runInfer "Log=>" g e $ do
   return (g, VarT (TV "Bool"))
+infer g e@(Statement v e1 e2) = runInfer "Statement=>" g e $ do
+  infer g e2 -- STUB
+
 --
 -- ----------------------------------------- 1l=>
 --  g |- () => 1 -| g

@@ -7,7 +7,7 @@ import qualified Text.Parsec.Language as L
 
 lexer = T.makeTokenParser (L.emptyDef {
       T.reservedNames = ["forall", "UNIT", "True", "False"]
-    , T.reservedOpNames = ["::", "->", "\\", "."]
+    , T.reservedOpNames = ["::", "->", "\\", ".", "=", ";"]
     , T.identStart = letter
     , T.identLetter = alphaNum
   })
@@ -27,7 +27,10 @@ readExpr s = case parse (pExpr <* eof) "" s of
   Right expr -> expr
 
 pExpr :: Parser Expr
-pExpr
+pExpr = try pStatement <|> pNonStatementExpr
+
+pNonStatementExpr :: Parser Expr
+pNonStatementExpr
   =   try pUni
   <|> try pAnn
   <|> try pApp
@@ -38,6 +41,15 @@ pExpr
   <|> parens pExpr
   <|> pLam
   <|> pVar
+ 
+pStatement :: Parser Expr
+pStatement = do
+  v <- name
+  _ <- op "="
+  e1 <- pNonStatementExpr
+  _ <- op ";"
+  e2 <- pExpr
+  return (Statement (EV v) e1 e2)
 
 pUni :: Parser Expr
 pUni = keyword "UNIT" >> return UniE

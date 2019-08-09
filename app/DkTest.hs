@@ -39,3 +39,4 @@ runDkTest = do
   showExpr False "(\\x y -> x) :: forall a b . a -> b -> a"
   showExpr False "((\\x -> x) :: forall a . a -> a) True"
   showExpr False "((\\x y -> x) :: forall a b . a -> b -> a) True"
+  showExpr False "x = True; 4.2"

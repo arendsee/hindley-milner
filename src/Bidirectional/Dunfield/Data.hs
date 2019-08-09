@@ -97,6 +97,8 @@ data Expr
   -- ^ (e : A)
   | IntE Integer | NumE Double | LogE Bool | StrE String
   -- ^ primitives
+  | Statement EVar Expr Expr
+  -- ^ x=e1; e2
   deriving(Show, Ord, Eq)
 
 -- | Types, see Dunfield Figure 6
