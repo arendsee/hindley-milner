@@ -267,6 +267,8 @@ instance Pretty Expr where
   pretty (NumE x) = pretty x
   pretty (StrE x) = dquotes (pretty x)
   pretty (LogE x) = pretty x
+  pretty (Statement v e1 e2) = pretty v <+> "=" <+> pretty e1 <> ";" <+> pretty e2
+
 
 instance Pretty GammaIndex where 
   pretty (VarG t) = pretty t

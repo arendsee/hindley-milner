@@ -3,6 +3,8 @@ module Bidirectional.Dunfield.Infer ( infer ) where
 import Bidirectional.Dunfield.Data
 import Control.Monad.Trans (liftIO)
 import Data.Text.Prettyprint.Doc
+import qualified Data.List as DL
+import qualified Data.Set as Set
 
 run :: Pretty a => Doc' -> [(Doc', Doc')] -> Stack a -> Stack a
 run s args x = do
@@ -45,8 +47,38 @@ runDerive :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type) -> Stack (Gamm
 runDerive s g e t x
   = run ("derive " <> s) [("g", pretty g), ("e", pretty e), ("t", pretty t)] x
 
-generalize :: Gamma -> Type -> Stack Type
-generalize g t = return t -- STUB
+generalize :: Type -> Stack Type
+generalize t = generalize' existentialMap t
+  where 
+
+    generalize' :: [(TVar, TVar)] -> Type -> Stack Type
+    generalize' [] t' = return t'
+    generalize' ((e,r):xs) t' = generalizeOne e r t' >>= generalize' xs
+
+    existentialMap
+      = zip
+        (Set.toList (findExistentials t))
+        (map (TV . return) ['a'..'z'])
+
+    findExistentials :: Type -> Set.Set TVar
+    findExistentials UniT = Set.empty
+    findExistentials (VarT _) = Set.empty
+    findExistentials (ExistT v) = Set.singleton v
+    findExistentials (Forall v t) = Set.delete v (findExistentials t)
+    findExistentials (FunT t1 t2) = Set.union (findExistentials t1) (findExistentials t2)
+
+    generalizeOne :: TVar -> TVar -> Type -> Stack Type
+    generalizeOne v r t = Forall <$> pure r <*> f v t where
+      f :: TVar -> Type -> Stack Type
+      f v t@(ExistT v')
+        | v == v' = return $ VarT r
+        | otherwise = return t
+      f v (FunT t1 t2) = FunT <$> (f v t1) <*> (f v t2)
+      f v t@(Forall x t')
+        | v /= x = Forall <$> pure x <*> f v t'
+        | otherwise = throwError OccursCheckFail
+      f _ t = return t
+
 
 -- | substitute all appearances of a given variable with an existential
 -- [t/v]A
@@ -246,7 +278,7 @@ infer g e@(LogE _) = runInfer "Log=>" g e $ do
 infer g e@(Statement v e1 e2) = runInfer "Statement=>" g e $ do
   occursCheckExpr g v
   (g', t1) <- infer g e1
-  t1' <- generalize g' t1
+  t1' <- generalize t1
   infer (g +> AnnG (VarE v) t1') e2
 
 --
