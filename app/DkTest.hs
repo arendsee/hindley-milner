@@ -17,9 +17,9 @@ showExpr verbose x = do
   if verbose
   then print e
   else return ()
-  x <- runStack (infer [] e) verbose
+  x <- runStack (typecheck e) verbose
   case x of
-    Right (_, t) -> print $ "_ :: " <> pretty t
+    Right t -> print $ "_ :: " <> pretty t
     Left err -> print $ "ERROR" <+> pretty err
   putStr "\n"
 

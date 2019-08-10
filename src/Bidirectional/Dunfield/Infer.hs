@@ -1,10 +1,13 @@
-module Bidirectional.Dunfield.Infer ( infer ) where
+module Bidirectional.Dunfield.Infer ( typecheck ) where
 
 import Bidirectional.Dunfield.Data
 import Control.Monad.Trans (liftIO)
 import Data.Text.Prettyprint.Doc
 import qualified Data.List as DL
 import qualified Data.Set as Set
+
+typecheck :: Expr -> Stack Type
+typecheck e = fmap snd $ infer [] e
 
 run :: Pretty a => Doc' -> [(Doc', Doc')] -> Stack a -> Stack a
 run s args x = do
