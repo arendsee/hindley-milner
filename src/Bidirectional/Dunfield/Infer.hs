@@ -7,24 +7,31 @@ import qualified Data.List as DL
 import qualified Data.Set as Set
 
 typecheck :: Expr -> Stack Type
-typecheck e = fmap snd $ infer [] e
+typecheck e = (fmap snd $ infer [] e) >>= generalize
 
 run :: Pretty a => Doc' -> [(Doc', Doc')] -> Stack a -> Stack a
 run s args x = do
-  isVerbose <- verbose
-  if isVerbose
-  then do
-    incDepth
-    d <- depth
-    liftIO . print $ pretty (take d $ repeat '>') <+> s
-    mapM writeArg args
-    output <- x
-    liftIO . print $ pretty (take d $ repeat '<') <+> s
-    decDepth
-    liftIO . print $ "  return:" <+> pretty output
-    return output
-  else
-    x
+  incDepth
+  v <- verbosity
+  d <- depth
+  run1 v d
+  output <- x
+  run2 v d
+  decDepth
+  run3 v output
+  return output
+  where
+    run1 0 _ = return ()
+    run1 1 d' = do
+      liftIO . print $ pretty (take d' $ repeat '>') <+> s
+      mapM writeArg args
+      return ()
+    run2 0 _ = return ()
+    run2 1 d' = do
+      liftIO . print $ pretty (take d' $ repeat '<') <+> s
+    run3 0 _ = return ()
+    run3 1 x = do
+      liftIO . print $ "  return:" <+> pretty x
 
 writeArg :: (Doc', Doc') -> Stack ()
 writeArg (name, arg) = do

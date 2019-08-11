@@ -9,36 +9,42 @@ import Bidirectional.Dunfield.Data (runStack)
 
 import Data.Text.Prettyprint.Doc
 
-showExpr :: Bool -> String -> IO ()
-showExpr verbose x = do
-  putStrLn $ "----------------------------------------------------------"
-  putStrLn x
+showExpr :: Int -> String -> IO ()
+showExpr verbosity x = do
+  log0 verbosity
   let e = readExpr x 
-  if verbose
-  then print e
-  else return ()
-  x <- runStack (typecheck e) verbose
-  case x of
-    Right t -> print $ "_ :: " <> pretty t
-    Left err -> print $ "ERROR" <+> pretty err
-  putStr "\n"
+  log1 verbosity e
+  x <- runStack (typecheck e) verbosity
+  log2 verbosity x
+  where
+    log0 0 = putStrLn x
+    log0 1 = do
+      putStrLn $ "----------------------------------------------------------"
+      putStrLn x
+    log1 0 _ = return ()
+    log1 1 e' = print e'
+    log2 _ (Right t) = print $ "_ :: " <> pretty t
+    log2 _ (Left err) = print $ "ERROR" <+> pretty err
+    log3 _ _ = "\n"
 
 runDkTest :: IO ()
 runDkTest = do
   -- primitives
-  showExpr False "42"
-  showExpr False "True"
-  showExpr False "4.2"
-  showExpr False "\"this is a string literal\""
+  showExpr 0 "42"
+  showExpr 0 "True"
+  showExpr 0 "4.2"
+  showExpr 0 "\"this is a string literal\""
   -- simple functions
-  showExpr False "(\\x -> True)"
-  showExpr False "(\\x -> True) 42"
-  showExpr False "(\\x -> (\\y -> True) x) 42"  -- expect: Bool
-  showExpr False "(\\x -> (\\y -> x) True) 42"  -- expect: Int
-  showExpr False "(\\x y->x) 1 True"
-  showExpr False "(\\x y -> x) :: forall a b . a -> b -> a"
-  showExpr False "((\\x -> x) :: forall a . a -> a) True"
-  showExpr False "((\\x y -> x) :: forall a b . a -> b -> a) True"
-  showExpr False "x = True; 4.2"
-  showExpr False "x = True; (\\y -> y) x"
-  showExpr True "f = (\\x y -> x); f 42"
+  showExpr 0 "(\\x -> True)"
+  showExpr 0 "(\\x -> True) 42"
+  showExpr 0 "(\\x -> (\\y -> True) x) 42"  -- expect: Bool
+  showExpr 0 "(\\x -> (\\y -> x) True) 42"  -- expect: Int
+  showExpr 0 "(\\x y->x) 1 True"
+  showExpr 0 "(\\x y -> x) :: forall a b . a -> b -> a"
+  showExpr 0 "((\\x -> x) :: forall a . a -> a) True"
+  showExpr 0 "((\\x y -> x) :: forall a b . a -> b -> a) True"
+  showExpr 0 "x = True; 4.2"
+  showExpr 0 "x = True; (\\y -> y) x"
+  -- should be the same
+  showExpr 0 "f = (\\x y -> x); f 42"
+  showExpr 0 "f = (\\x y -> x); x = f 42; x"

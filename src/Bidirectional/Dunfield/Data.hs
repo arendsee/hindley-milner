@@ -27,7 +27,7 @@ module Bidirectional.Dunfield.Data
   -- * Pretty printing
   , Doc'
   -- * Config handling
-  , verbose
+  , verbosity
 ) where
 
 import qualified Data.List as DL
@@ -47,9 +47,9 @@ type Stack a = GeneralStack StackConfig TypeError [String] StackState a
 
 -- | currently I do nothing with the Reader and Writer monads, but I'm leaving
 -- them in for now since I will need them when I plug this all into Morloc.
-runStack :: Stack a -> Bool -> IO (Either TypeError a)
-runStack e verbose = do
-  ((e, _), _) <- MS.runStateT(MW.runWriterT(ME.runExceptT(MR.runReaderT e (StackConfig verbose)))) emptyState
+runStack :: Stack a -> Int -> IO (Either TypeError a)
+runStack e verbosity = do
+  ((e, _), _) <- MS.runStateT(MW.runWriterT(ME.runExceptT(MR.runReaderT e (StackConfig verbosity)))) emptyState
   return e
 
 type Gamma = [GammaIndex]
@@ -63,11 +63,11 @@ data StackState = StackState {
 emptyState = StackState 0 0
 
 data StackConfig = StackConfig {
-      configVerbose :: Bool  
+      configVerbosity :: Int 
   }
 
-verbose :: Stack Bool
-verbose = MR.asks configVerbose
+verbosity :: Stack Int
+verbosity = MR.asks configVerbosity
 
 -- | A context, see Dunfield Figure 6
 data GammaIndex
