@@ -262,9 +262,17 @@ instance Pretty Type where
   pretty (VarT (TV s)) = pretty s
   pretty (FunT t1@(FunT _ _) t2) = parens (pretty t1) <+> "->" <+> pretty t2
   pretty (FunT t1 t2) = pretty t1 <+> "->" <+> pretty t2
-  pretty (Forall (TV s) t) = "Forall" <+> pretty s <+> "." <+> pretty t
+  pretty t@(Forall (TV s) t') = "forall" <+> hsep (forallVars t) <+> "." <+> forallBlock t
   pretty (ExistT e) = "<" <> pretty e <> ">"
   pretty (ArrT v ts) = pretty v <+> hsep (map pretty ts)
+
+forallVars :: Type -> [Doc a]
+forallVars (Forall s t) = pretty s : forallVars t
+forallVars _ = []
+
+forallBlock :: Type -> Doc a
+forallBlock (Forall s t) = forallBlock t
+forallBlock t = pretty t
 
 instance Pretty Expr where
   pretty UniE = "()"

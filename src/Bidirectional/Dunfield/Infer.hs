@@ -21,17 +21,20 @@ run s args x = do
   run3 v output
   return output
   where
-    run1 0 _ = return ()
-    run1 1 d' = do
-      liftIO . print $ pretty (take d' $ repeat '>') <+> s
-      mapM writeArg args
-      return ()
-    run2 0 _ = return ()
-    run2 1 d' = do
-      liftIO . print $ pretty (take d' $ repeat '<') <+> s
-    run3 0 _ = return ()
-    run3 1 x = do
-      liftIO . print $ "  return:" <+> pretty x
+    run1 v d'
+      | v < 2 = return ()
+      | v == 2 = do
+        liftIO . print $ pretty (take d' $ repeat '>') <+> s
+        mapM writeArg args
+        return ()
+    run2 v d'
+      | v < 2 = return ()
+      | v == 2 = do
+        liftIO . print $ pretty (take d' $ repeat '<') <+> s
+    run3 v x
+      | v < 2 = return ()
+      | v == 2 = do
+        liftIO . print $ "  return:" <+> pretty x
 
 writeArg :: (Doc', Doc') -> Stack ()
 writeArg (name, arg) = do

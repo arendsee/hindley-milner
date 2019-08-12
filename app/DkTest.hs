@@ -17,15 +17,23 @@ showExpr verbosity x = do
   x <- runStack (typecheck e) verbosity
   log2 verbosity x
   where
-    log0 0 = putStrLn x
-    log0 1 = do
+    log0 0 = return ()
+    log0 1 = putStrLn x
+    log0 2 = do
       putStrLn $ "----------------------------------------------------------"
       putStrLn x
-    log1 0 _ = return ()
-    log1 1 e' = print e'
-    log2 _ (Right t) = print $ "_ :: " <> pretty t
-    log2 _ (Left err) = print $ "ERROR" <+> pretty err
-    log3 _ _ = "\n"
+    log1 v e'
+      | v < 2 = return ()
+      | v == 2 = print e'
+    log2 v (Right t)
+      | v > 0 = print $ "_ :: " <> pretty t
+      | otherwise = return ()
+    log2 v (Left err)
+      | v > 0 = print $ "ERROR" <+> pretty err
+      | otherwise = return ()
+    log3 v _
+      | v > 0 = "\n"
+      | otherwise = return ()
 
 runDkTest :: IO ()
 runDkTest = do
@@ -51,7 +59,7 @@ runDkTest = do
   showExpr 0 "apply :: forall a b . (a->b) -> a -> b; f :: Int -> Bool; apply f 42"
   showExpr 0 "[1,2,3]"
   showExpr 0 "[]"
-  -- showExpr 0 "[1,2,True]" -- TODO: Add better error message
+  -- showExpr 1 "[1,2,True]" -- TODO: Add better error message
   showExpr 0 "f :: [Int] -> Bool; f [1]"
   showExpr 0 "f :: forall a . [a] -> Bool; f [1]"
   showExpr 0 "map :: forall a b . (a->b) -> [a] -> [b]; f :: Int -> Bool; map f [5,2]"
