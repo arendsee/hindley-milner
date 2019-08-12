@@ -1,0 +1,7 @@
+xi version 0.1.0
+
+Usage:
+  xi [--verbosity=<verbosity>] <expression>
+
+Options:
+  -v, --verbosity INT   Verbosity level: 0=nothing, 1=annotations, 2=trace [default: 1]
