@@ -97,8 +97,10 @@ data Expr
   -- ^ (e : A)
   | IntE Integer | NumE Double | LogE Bool | StrE String
   -- ^ primitives
-  | Statement EVar Expr Expr
+  | Declaration EVar Expr Expr
   -- ^ x=e1; e2
+  | Signature EVar Type Expr
+  -- ^ x :: A; e
   deriving(Show, Ord, Eq)
 
 -- | Types, see Dunfield Figure 6
@@ -113,6 +115,8 @@ data Type
   -- ^ (Forall a . A)
   | FunT Type Type
   -- ^ (A->B)
+  | ArrT TVar [Type]
+  -- ^ f [Type]
   deriving(Show, Ord, Eq)
 
 data Monotype
@@ -135,6 +139,7 @@ data TypeError
   | TypeMismatch
   | UnexpectedPattern Expr Type
   | ToplevelRedefinition
+  | UnkindJackass
   deriving(Show, Ord, Eq)
 
 (+>) :: Indexable a => Gamma -> a -> Gamma
@@ -236,18 +241,19 @@ instance Pretty TVar where
   pretty (TV n) = pretty n
 
 instance Pretty TypeError where
-  pretty UnknownError       = "UnknownError: ???"
-  pretty SubtypeError       = "SubtypeError: ???"
-  pretty ExistentialError   = "ExistentialError: probably a bug"
-  pretty BadExistentialCast = "BadExistentialCast"
-  pretty AccessError        = "Bad access attempt"
-  pretty NonFunctionDerive  = "Derive should only be called on function applications"
-  pretty UnboundVariable    = "Unbound variable"
-  pretty OccursCheckFail    = "OccursCheckFail"
-  pretty EmptyCut           = "EmptyCut - probably a logic bug"
-  pretty TypeMismatch       = "TypeMismatch"
-  pretty (UnexpectedPattern e t) = "UnexpectedPattern: " <> pretty e <> "|" <> pretty t  
-  pretty ToplevelRedefinition = "ToplevelRedefinition"
+  pretty UnknownError            = "UnknownError: ???"
+  pretty SubtypeError            = "SubtypeError: ???"
+  pretty ExistentialError        = "ExistentialError: probably a bug"
+  pretty BadExistentialCast      = "BadExistentialCast"
+  pretty AccessError             = "Bad access attempt"
+  pretty NonFunctionDerive       = "Derive should only be called on function applications"
+  pretty UnboundVariable         = "Unbound variable"
+  pretty OccursCheckFail         = "OccursCheckFail"
+  pretty EmptyCut                = "EmptyCut - probably a logic bug"
+  pretty TypeMismatch            = "TypeMismatch"
+  pretty (UnexpectedPattern e t) = "UnexpectedPattern: " <> pretty e <> "|" <> pretty t
+  pretty ToplevelRedefinition    = "ToplevelRedefinition"
+  pretty UnkindJackass           = "UnkindJackass"
 
 instance Pretty Type where
   pretty UniT = "1"
@@ -256,6 +262,7 @@ instance Pretty Type where
   pretty (FunT t1 t2) = pretty t1 <+> "->" <+> pretty t2
   pretty (Forall (TV s) t) = "Forall" <+> pretty s <+> "." <+> pretty t
   pretty (ExistT e) = "<" <> pretty e <> ">"
+  pretty (ArrT v ts) = pretty v <+> hsep (map pretty ts)
 
 instance Pretty Expr where
   pretty UniE = "()"
@@ -267,8 +274,8 @@ instance Pretty Expr where
   pretty (NumE x) = pretty x
   pretty (StrE x) = dquotes (pretty x)
   pretty (LogE x) = pretty x
-  pretty (Statement v e1 e2) = pretty v <+> "=" <+> pretty e1 <> ";" <+> pretty e2
-
+  pretty (Declaration v e1 e2) = pretty v <+> "=" <+> pretty e1 <> ";" <+> pretty e2
+  pretty (Signature v t e2) = pretty v <+> "::" <+> pretty t <> ";" <+> pretty e2
 
 instance Pretty GammaIndex where 
   pretty (VarG t) = pretty t

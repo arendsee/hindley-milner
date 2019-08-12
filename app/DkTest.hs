@@ -48,3 +48,8 @@ runDkTest = do
   -- should be the same
   showExpr 0 "f = (\\x y -> x); f 42"
   showExpr 0 "f = (\\x y -> x); x = f 42; x"
+  -- showExpr 0 "f = (\\x -> y); f :: forall a . a -> a; f 42"
+  showExpr 0 "x :: Int"
+  showExpr 0 "xs :: List a"
+  showExpr 0 "f :: forall a . a -> a; f 42"
+  showExpr 0 "apply :: forall a b . (a->b) -> a -> b; f :: Int -> Bool; apply f 42"

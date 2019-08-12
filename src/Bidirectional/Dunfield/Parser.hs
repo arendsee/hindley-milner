@@ -41,15 +41,27 @@ pNonStatementExpr
   <|> parens pExpr
   <|> pLam
   <|> pVar
- 
+
 pStatement :: Parser Expr
-pStatement = do
+pStatement = try pDeclaration <|> pSignature
+ 
+pDeclaration :: Parser Expr
+pDeclaration = do
   v <- name
   _ <- op "="
   e1 <- pNonStatementExpr
   _ <- op ";"
   e2 <- pExpr
-  return (Statement (EV v) e1 e2)
+  return (Declaration (EV v) e1 e2)
+
+pSignature :: Parser Expr
+pSignature = do
+  v <- name
+  _ <- op "::"
+  t <- pType
+  _ <- op ";"
+  e2 <- pExpr
+  return (Signature (EV v) t e2)
 
 pUni :: Parser Expr
 pUni = keyword "UNIT" >> return UniE
@@ -117,10 +129,19 @@ pEVar = fmap EV name
 
 pType :: Parser Type
 pType
-  = try pFunT
+  =   try pArrT
+  <|> try pFunT
   <|> parens pType
   <|> try pForAllT
   <|> pVarT
+
+pArrT :: Parser Type
+pArrT = do
+  v <- name
+  args <- many1 pType'
+  return $ ArrT (TV v) args
+  where
+    pType' = parens pType <|> pVarT
 
 pFunT :: Parser Type
 pFunT = do
@@ -129,7 +150,7 @@ pFunT = do
   ts <- sepBy1 pType' (op "->")
   return $ foldr1 FunT (t:ts)
   where
-    pType' = parens pType <|> pVarT
+    pType' = parens pType <|> try pArrT <|> pVarT
 
 pVarT :: Parser Type
 pVarT = fmap (VarT . TV) name

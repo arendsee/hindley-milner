@@ -76,6 +76,7 @@ generalize t = generalize' existentialMap t
     findExistentials (ExistT v) = Set.singleton v
     findExistentials (Forall v t) = Set.delete v (findExistentials t)
     findExistentials (FunT t1 t2) = Set.union (findExistentials t1) (findExistentials t2)
+    findExistentials (ArrT v ts) = Set.unions (map findExistentials ts)
 
     generalizeOne :: TVar -> TVar -> Type -> Stack Type
     generalizeOne v r t = Forall <$> pure r <*> f v t where
@@ -141,7 +142,6 @@ occursCheckExpr ((AnnG (VarE v') _):gs) v
   | v' == v = throwError ToplevelRedefinition
   | otherwise = occursCheckExpr gs v
 
-
 -- | type 1 is more polymorphic than type 2 (Dunfield Figure 9)
 subtype :: Type -> Type -> Gamma -> Stack Gamma
 --
@@ -182,6 +182,21 @@ subtype t@(Forall x a) b g = runSubtype "<:ForallL" t b g $ do
 --  g1 |- A <: Forall a. B -| g2
 subtype a t@(Forall v b) g = runSubtype "<:ForallR" a t g $ do
   subtype a b (g +> VarG v) >>= cut (VarG v)
+--  g1 |- A1 <: B1
+-- ----------------------------------------- <:App
+--  g1 |- A1 A2 <: B1 B2 -| g2
+--  unparameterized types are the same as VarT, so subtype on that instead
+subtype (ArrT v1 []) (ArrT v2 []) g = subtype (VarT v1) (VarT v2) g
+subtype t1@(ArrT v1 vs1) t2@(ArrT v2 vs2) g = runSubtype "<:App" t1 t2 g $ do
+  subtype (VarT v1) (VarT v2) g
+  compareArr vs1 vs2 g
+  where
+    compareArr :: [Type] -> [Type] -> Gamma -> Stack Gamma
+    compareArr [] [] g' = return g'
+    compareArr (t1:ts1) (t2:ts2) g' = do
+      g'' <- subtype t1 t2 g'
+      compareArr ts1 ts2 g''
+    compareArr _ _ _ = throwError UnkindJackass
 --  Ea not in FV(a)
 --  g1[Ea] |- Ea <=: A -| g2
 -- ----------------------------------------- <:InstantiateL
@@ -285,11 +300,13 @@ infer g e@(StrE _) = runInfer "Str=>" g e $ do
   return (g, VarT (TV "Str"))
 infer g e@(LogE _) = runInfer "Log=>" g e $ do
   return (g, VarT (TV "Bool"))
-infer g e@(Statement v e1 e2) = runInfer "Statement=>" g e $ do
+infer g e@(Declaration v e1 e2) = runInfer "Declaration=>" g e $ do
   occursCheckExpr g v
   (g', t1) <- infer g e1
   t1' <- generalize t1
   infer (g +> AnnG (VarE v) t1') e2
+infer g e@(Signature v t e2) = runInfer "Signature=>" g e $ do
+  infer (g +> AnnG (VarE v) t) e2
 
 --
 -- ----------------------------------------- 1l=>
@@ -329,6 +346,18 @@ infer g1 e@(AppE e1 e2) = runInfer "-->E" g1 e $ do
 --  g1 |- e <= A -| g2
 -- ----------------------------------------- Anno
 --  g1 |- (e:A) => A -| g2
+infer g e1@(AnnE e@(VarE _) t) = runInfer "Anno" g e1 $ do
+  -- This is a bit questionable. If a single variable is annotated, e.g.
+  -- `x::Int`, and is not declared, this would normally raise an
+  -- UnboundVariable error. However, it is convenient for testing purposes, and
+  -- also for Morloc where functions are imported as black boxes from other
+  -- langugaes, to be able to simply declare a type as an axiom. Perhaps I
+  -- should add dedicated syntax for axiomatic type declarations?
+  case lookupE e g of
+    (Just _) -> do
+      check g e t
+      return (g, t)
+    Nothing -> return (g, t)
 infer g e1@(AnnE e t) = runInfer "Anno" g e1 $ do
   (g, t') <- check g e t
   return (g, t)
