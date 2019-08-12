@@ -76,7 +76,7 @@ generalize t = generalize' existentialMap t
     findExistentials (ExistT v) = Set.singleton v
     findExistentials (Forall v t) = Set.delete v (findExistentials t)
     findExistentials (FunT t1 t2) = Set.union (findExistentials t1) (findExistentials t2)
-    findExistentials (ArrT v ts) = Set.unions (map findExistentials ts)
+    findExistentials (ArrT _ ts) = Set.unions (map findExistentials ts)
 
     generalizeOne :: TVar -> TVar -> Type -> Stack Type
     generalizeOne v r t = Forall <$> pure r <*> f v t where
@@ -87,7 +87,8 @@ generalize t = generalize' existentialMap t
       f v (FunT t1 t2) = FunT <$> (f v t1) <*> (f v t2)
       f v t@(Forall x t')
         | v /= x = Forall <$> pure x <*> f v t'
-        | otherwise = throwError OccursCheckFail
+        | otherwise = return t
+      f v t@(ArrT v' xs) = ArrT <$> pure v' <*> mapM (f v) xs
       f _ t = return t
 
 
@@ -101,6 +102,7 @@ substitute v (FunT t1 t2) = FunT (substitute v t1) (substitute v t2)
 substitute v t@(Forall x t')
   | v /= x = Forall x (substitute v t')
   | otherwise = t -- allows shadowing of the variable
+substitute v t@(ArrT v' ts) = ArrT v' (map (substitute v) ts)
 substitute _ t = t
 
 
@@ -118,6 +120,7 @@ apply g (Forall x a) = Forall x (apply g a)
 apply g a@(ExistT v) = case lookupT v g of
   (Just t') -> apply g t' -- reduce an existential; strictly smaller term
   Nothing -> a
+apply g (ArrT v ts) = ArrT v (map (apply g) ts) 
 
 
 -- | Ensure a given type variable is not free within a given type
@@ -361,6 +364,13 @@ infer g e1@(AnnE e@(VarE _) t) = runInfer "Anno" g e1 $ do
 infer g e1@(AnnE e t) = runInfer "Anno" g e1 $ do
   (g, t') <- check g e t
   return (g, t)
+infer g e1@(ListE []) = do
+  t <- newvar
+  return (g +> t, ArrT (TV "List") [t])
+infer g e1@(ListE (x:xs)) = do 
+  (g', t') <- infer g x
+  mapM (\x' -> check g x' t') xs 
+  return (g', ArrT (TV "List") [t'])
 
 
 -- | Pattern matches against each type

@@ -89,6 +89,8 @@ data Expr
   -- ^ (())
   | VarE EVar 
   -- ^ (x)
+  | ListE [Expr]
+  -- ^ [e]
   | LamE EVar Expr
   -- ^ (\x -> e)
   | AppE Expr Expr
@@ -276,6 +278,7 @@ instance Pretty Expr where
   pretty (LogE x) = pretty x
   pretty (Declaration v e1 e2) = pretty v <+> "=" <+> pretty e1 <> ";" <+> pretty e2
   pretty (Signature v t e2) = pretty v <+> "::" <+> pretty t <> ";" <+> pretty e2
+  pretty (ListE xs) = list (map pretty xs)
 
 instance Pretty GammaIndex where 
   pretty (VarG t) = pretty t

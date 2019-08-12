@@ -38,9 +38,13 @@ pNonStatementExpr
   <|> try pLogE
   <|> try pNumE
   <|> try pIntE
+  <|> pListE
   <|> parens pExpr
   <|> pLam
   <|> pVar
+
+pListE :: Parser Expr
+pListE = fmap ListE $ brackets (sepBy pExpr (char ','))
 
 pStatement :: Parser Expr
 pStatement = try pDeclaration <|> pSignature
@@ -68,7 +72,7 @@ pUni = keyword "UNIT" >> return UniE
 
 pAnn :: Parser Expr
 pAnn = do
-  e <- parens pExpr <|> pVar
+  e <- parens pExpr <|> pVar <|> pListE
   _ <- op "::"
   t <- pType
   return $ AnnE e t
@@ -78,7 +82,7 @@ pApp = do
   f <- parens pExpr <|> pVar
   es <- many1
      $   parens pExpr
-     <|> try pStrE <|> try pLogE <|> try pNumE <|> try pIntE
+     <|> pListE <|> try pStrE <|> try pLogE <|> try pNumE <|> try pIntE
      <|> try pUni <|> pVar
   return $ applyMany f es where
     applyMany f' [] = f' -- this shouldn't happen
@@ -131,6 +135,7 @@ pType :: Parser Type
 pType
   =   try pArrT
   <|> try pFunT
+  <|> pListT
   <|> parens pType
   <|> try pForAllT
   <|> pVarT
@@ -141,7 +146,7 @@ pArrT = do
   args <- many1 pType'
   return $ ArrT (TV v) args
   where
-    pType' = parens pType <|> pVarT
+    pType' = parens pType <|> pVarT <|> pListT
 
 pFunT :: Parser Type
 pFunT = do
@@ -150,7 +155,10 @@ pFunT = do
   ts <- sepBy1 pType' (op "->")
   return $ foldr1 FunT (t:ts)
   where
-    pType' = parens pType <|> try pArrT <|> pVarT
+    pType' = parens pType <|> try pArrT <|> pVarT <|> pListT
+
+pListT :: Parser Type
+pListT = fmap (\x -> ArrT (TV "List") [x]) (brackets pType)
 
 pVarT :: Parser Type
 pVarT = fmap (VarT . TV) name
