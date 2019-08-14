@@ -14,6 +14,7 @@ module Bidirectional.Dunfield.Data
   , access2
   , accessWith
   , accessWith2
+  , ann
   , lookupT
   , lookupE
   , throwError
@@ -142,6 +143,7 @@ data TypeError
   | UnexpectedPattern Expr Type
   | ToplevelRedefinition
   | UnkindJackass
+  | NoAnnotationFound
   deriving(Show, Ord, Eq)
 
 (+>) :: Indexable a => Gamma -> a -> Gamma
@@ -198,6 +200,12 @@ accessWith2
 accessWith2 f g lgi rgi gs = case access2 lgi rgi gs of
   (Just (ls, x, ms, y, rs)) -> return $ ls <> (f x:ms) <> (g y:rs)
   Nothing -> throwError AccessError
+
+ann :: Expr -> Type -> Expr
+ann (AnnE e _) t = AnnE e t 
+ann e@(Declaration _ _ _) _ = e
+ann e@(Signature _ _ _) _ = e
+ann e t = AnnE e t
 
 newvar :: Stack Type
 newvar = do
@@ -256,6 +264,7 @@ instance Pretty TypeError where
   pretty (UnexpectedPattern e t) = "UnexpectedPattern: " <> pretty e <> "|" <> pretty t
   pretty ToplevelRedefinition    = "ToplevelRedefinition"
   pretty UnkindJackass           = "UnkindJackass"
+  pretty NoAnnotationFound       = "NoAnnotationFound"
 
 instance Pretty Type where
   pretty UniT = "1"
@@ -278,14 +287,15 @@ instance Pretty Expr where
   pretty UniE = "()"
   pretty (VarE (EV s)) = pretty s
   pretty (LamE (EV n) e) = "\\" <> pretty n <+> "->" <+> pretty e
-  pretty (AnnE e t) = pretty e <+> ":" <+> pretty t
-  pretty (AppE e1 e2) = parens (pretty e1) <+> pretty e2
+  pretty (AnnE e t) = parens (pretty e <+> ":" <+> pretty t)
+  pretty (AppE e1@(LamE _ _) e2) = parens (pretty e1) <+> pretty e2
+  pretty (AppE e1 e2) = pretty e1 <+> pretty e2
   pretty (IntE x) = pretty x
   pretty (NumE x) = pretty x
   pretty (StrE x) = dquotes (pretty x)
   pretty (LogE x) = pretty x
-  pretty (Declaration v e1 e2) = pretty v <+> "=" <+> pretty e1 <> ";" <+> pretty e2
-  pretty (Signature v t e2) = pretty v <+> "::" <+> pretty t <> ";" <+> pretty e2
+  pretty (Declaration v e1 e2) = pretty v <+> "=" <+> pretty e1 <> line <> pretty e2
+  pretty (Signature v t e2) = pretty v <+> "::" <+> pretty t <> line <> pretty e2
   pretty (ListE xs) = list (map pretty xs)
 
 instance Pretty GammaIndex where 

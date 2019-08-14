@@ -3,11 +3,10 @@ module Bidirectional.Dunfield.Infer ( typecheck ) where
 import Bidirectional.Dunfield.Data
 import Control.Monad.Trans (liftIO)
 import Data.Text.Prettyprint.Doc
-import qualified Data.List as DL
 import qualified Data.Set as Set
 
-typecheck :: Expr -> Stack Type
-typecheck e = (fmap snd $ infer [] e) >>= generalize
+typecheck :: Expr -> Stack Expr
+typecheck e = fmap snd $ infer [] e
 
 run :: Pretty a => Doc' -> [(Doc', Doc')] -> Stack a -> Stack a
 run s args x = do
@@ -48,15 +47,15 @@ runInstantiate :: Doc' -> Type -> Type -> Gamma -> Stack Gamma -> Stack Gamma
 runInstantiate s t1 t2 g x
   = run ("instantiate " <> s) [("ta", pretty t1), ("tb", pretty t2), ("g", pretty g)] x
 
-runInfer :: Doc' -> Gamma -> Expr -> Stack (Gamma, Type) -> Stack (Gamma, Type)
-runInfer s g e x
-  = run ("infer " <> s) [("g", pretty g), ("e", pretty e)] x
+runInfer :: Doc' -> Gamma -> Expr -> Stack (Gamma, Expr) -> Stack (Gamma, Expr)
+runInfer s g e x = do
+  run ("infer " <> s) [("g", pretty g), ("e", pretty e)] x
 
-runCheck :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type) -> Stack (Gamma, Type)
+runCheck :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr) -> Stack (Gamma, Type, Expr)
 runCheck s g e t x
   = run ("check " <> s) [("g", pretty g), ("e", pretty e), ("t", pretty t)] x
 
-runDerive :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type) -> Stack (Gamma, Type)
+runDerive :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr) -> Stack (Gamma, Type, Expr)
 runDerive s g e t x
   = run ("derive " <> s) [("g", pretty g), ("e", pretty e), ("t", pretty t)] x
 
@@ -125,22 +124,34 @@ apply g a@(ExistT v) = case lookupT v g of
   Nothing -> a
 apply g (ArrT v ts) = ArrT v (map (apply g) ts) 
 
+applyE :: Gamma -> Expr -> Expr
+applyE g (ListE xs) = ListE (map (applyE g) xs)
+applyE g (LamE v e) = LamE v (applyE g e)
+applyE g (AppE e1 e2) = AppE (applyE g e1) (applyE g e2)
+applyE g (AnnE e t) = ann (applyE g e) (apply g t)
+applyE g (Declaration v e1 e2) = Declaration v (applyE g e1) (applyE g e2)
+applyE g (Signature v t e) = Signature v (apply g t) (applyE g e)
+applyE _ e = e
 
 -- | Ensure a given type variable is not free within a given type
-occursCheck :: Type -> TVar -> Stack TVar
-occursCheck UniT v = return v
+occursCheck :: Type -> TVar -> Stack ()
+occursCheck UniT v = return ()
 occursCheck (VarT v') v 
   | v' == v = throwError OccursCheckFail
-  | otherwise = return v
+  | otherwise = return ()
 occursCheck (FunT t1 t2) v = do
   occursCheck t1 v
   occursCheck t2 v
 occursCheck (Forall v' t) v
-  | v' == v = return v -- variable is bound, we are done
+  | v' == v = return () -- variable is bound, we are done
   | otherwise = occursCheck t v -- else recurse
 occursCheck (ExistT v') v
   | v' == v = throwError OccursCheckFail -- existentials count
-  | otherwise = return v'
+  | otherwise = return ()
+occursCheck (ArrT v' (t:ts)) v
+  | v' == v = throwError OccursCheckFail
+  | otherwise = mapM_ (flip occursCheck $ v) ts
+
 
 occursCheckExpr :: Gamma -> EVar -> Stack EVar
 occursCheckExpr [] v = return v
@@ -296,35 +307,55 @@ instantiate ta@(ExistT v) tb g1 = runInstantiate "instLSolve" ta tb g1 $ do
 instantiate t1 t2 g = runInstantiate "error" t1 t2 g $ do
   return g
 
-infer :: Gamma -> Expr -> Stack (Gamma, Type)
+-- get the toplevel type of a fully annotated expression
+typeof :: Expr -> Stack Type
+typeof (Declaration _ _ e) = typeof e
+typeof (Signature _ _ e) = typeof e
+typeof (AnnE _ t) = return t
+typeof _ = throwError NoAnnotationFound
+
+
+infer :: Gamma -> Expr -> Stack (Gamma, Expr)
 -- handle primitives
 infer g e@(NumE _) = runInfer "Num=>" g e $ do
-  return (g, VarT (TV "Num"))
+  let t = VarT (TV "Num")
+  return (g, ann e t)
 infer g e@(IntE _) = runInfer "Int=>" g e $ do
-  return (g, VarT (TV "Int"))
+  let t = VarT (TV "Int")
+  return (g, ann e t)
 infer g e@(StrE _) = runInfer "Str=>" g e $ do
-  return (g, VarT (TV "Str"))
+  let t = VarT (TV "Str")
+  return (g, ann e t)
 infer g e@(LogE _) = runInfer "Log=>" g e $ do
-  return (g, VarT (TV "Bool"))
+  let t = VarT (TV "Bool")
+  return (g, ann e t)
 infer g e@(Declaration v e1 e2) = runInfer "Declaration=>" g e $ do
   occursCheckExpr g v
-  (g', t1) <- infer g e1
-  t1' <- generalize t1
-  infer (g +> AnnG (VarE v) t1') e2
+  (g', e1') <- infer g e1
+  t1' <- typeof e1' >>= generalize
+  (g'', e2') <- infer (g +> AnnG (VarE v) t1') e2
+  return (g'', Declaration v (ann e1 t1') e2')
 infer g e@(Signature v t e2) = runInfer "Signature=>" g e $ do
-  infer (g +> AnnG (VarE v) t) e2
+  (g', e2') <- infer (g +> AnnG (VarE v) t) e2
+  return $ (g', Signature v t e2')
+
+{-
+map :: forall a b . (a->b) -> [a] -> [b]
+f :: Int -> Bool
+((map :: (Int -> Bool) -> [Int] -> [Bool]) (f :: Int) ([5,2] :: [Int]) :: Bool)
+-}
 
 --
 -- ----------------------------------------- 1l=>
 --  g |- () => 1 -| g
 infer g e@UniE = runInfer "1l=>" g e $ do
-  return (g, UniT) 
+  return (g, ann UniE UniT) 
 --  (x:A) in g
 -- ----------------------------=>------------- Var
 --  g |- x => A -| g
 infer g e@(VarE _) = runInfer "Var" g e $ do
   case lookupE e g of
-    (Just t) -> return (g, t)
+    (Just t) -> return (g, ann e t)
     Nothing  -> throwError UnboundVariable
 --  g1,Ea,Eb,x:Ea |- e <= Eb -| g2,x:Ea,g3
 -- ----------------------------------------- -->I=>
@@ -332,13 +363,14 @@ infer g e@(VarE _) = runInfer "Var" g e $ do
 infer g1 e@(LamE v e2) = runInfer "-->I=>" g1 e $ do
   a <- newvar
   b <- newvar
-  let ann = AnnG (VarE v) a
-      g' = g1 +> a +> b +> ann
-  (g'', t) <- check g' e2 b
+  let anng = AnnG (VarE v) a
+      g' = g1 +> a +> b +> anng
+  (g'', _, e2') <- check g' e2 b
+  t <- typeof e2'
   case lookupE (VarE v) g'' of
     (Just a') -> do
-      g2 <- cut ann g''
-      return (g2, FunT a' t)
+      g2 <- cut anng g''
+      return (g2, ann (LamE v e2') (FunT a' t))
     Nothing -> throwError UnknownError
 
 --  g1 |- e1 => A -| g2
@@ -346,8 +378,10 @@ infer g1 e@(LamE v e2) = runInfer "-->I=>" g1 e $ do
 -- ----------------------------------------- -->E
 --  g1 |- e1 e2 => C -| g3
 infer g1 e@(AppE e1 e2) = runInfer "-->E" g1 e $ do
-  (g2, a) <- infer g1 e1
-  derive g2 e2 (apply g2 a)
+  (g2, e1') <- infer g1 e1
+  a <- typeof e1'
+  (g3, b, e2') <- derive g2 e2 (apply g2 a)
+  return (g3, AnnE (AppE e1' e2') b)
 --  g1 |- A
 --  g1 |- e <= A -| g2
 -- ----------------------------------------- Anno
@@ -362,27 +396,28 @@ infer g e1@(AnnE e@(VarE _) t) = runInfer "Anno" g e1 $ do
   case lookupE e g of
     (Just _) -> do
       check g e t
-      return (g, t)
-    Nothing -> return (g, t)
+      return (g, e1)
+    Nothing -> return (g, e1)
 infer g e1@(AnnE e t) = runInfer "Anno" g e1 $ do
-  (g, t') <- check g e t
-  return (g, t)
+  (g, _, e') <- check g e t
+  return (g, e')
 infer g e1@(ListE []) = do
   t <- newvar
-  return (g +> t, ArrT (TV "List") [t])
+  return (g +> t, ann e1 (ArrT (TV "List") [t]))
 infer g e1@(ListE (x:xs)) = do 
-  (g', t') <- infer g x
+  (g', e') <- infer g x
+  t' <- typeof e'
   mapM (\x' -> check g x' t') xs 
-  return (g', ArrT (TV "List") [t'])
+  return (g', ann e1 (ArrT (TV "List") [t']))
 
 
 -- | Pattern matches against each type
-check :: Gamma -> Expr -> Type -> Stack (Gamma, Type)
+check :: Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr)
 --
 -- ----------------------------------------- 1l
 --  g |- () <= 1 -| g
 check g UniE UniT = runCheck "1l" g UniE UniT  $ do
-  return (g, UniT)
+  return (g, UniT, ann UniE UniT)
 check g e UniT = runCheck "1l-error" g e UniT $ do
   throwError TypeMismatch
 --  g1,x:A |- e <= B -| g2,x:A,g3
@@ -390,41 +425,45 @@ check g e UniT = runCheck "1l-error" g e UniT $ do
 --  g1 |- \x.e <= A -> B -| g2
 check g r1@(LamE v e) r2@(FunT a b) = runCheck "-->I" g r1 r2 $ do
   -- define x:A
-  let ann = AnnG (VarE v) a
+  let anng = AnnG (VarE v) a
   -- check that e has the expected output type
-  (g', t') <- check (g +> ann) e b
+  (g', t', e') <- check (g +> anng) e b
   -- ignore the trailing context and (x:A), since it is out of scope
-  g2 <- cut ann g'
-  return (g2, t')
+  g2 <- cut anng g'
+  return (g2, t', ann (LamE v e') (apply g2 r2))
 --  g1,x |- e <= A -| g2,x,g3
 -- ----------------------------------------- Forall.I
 --  g1 |- e <= Forall x.A -| g2
 check g1 e r2@(Forall x a) = runCheck "Forall.I" g1 e r2 $ do
-  (g', t') <- check (g1 +> VarG x) e a
+  (g', t', e') <- check (g1 +> VarG x) e a
   g2 <- cut (VarG x) g'
-  return (g2, t')
+  return (g2, t', ann e' t')
 --  g1 |- e => A -| g2
 --  g2 |- [g2]A <: [g2]B -| g3
 -- ----------------------------------------- Sub
 --  g1 |- e <= B -| g3
 check g1 e b = runCheck "Sub" g1 e b $ do
-  (g2, a) <- infer g1 e
+  (g2, e') <- infer g1 e
+  a <- typeof e'
   g3 <- subtype (apply g2 a) (apply g2 b) g2
-  return (g3, apply g3 a)
+  let a' = apply g3 a
+  return (g3, apply g3 a, ann (applyE g3 e') a)
 
-
-derive :: Gamma -> Expr -> Type -> Stack (Gamma, Type)
+derive :: Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr)
 --  g1 |- e <= A -| g2
 -- ----------------------------------------- -->App
 --  g1 |- A->C o e =>> C -| g2
 derive g e t@(FunT a b) = runDerive "-->App" g e t $ do
-  (g', t) <- check g e a
-  return (g', apply g' b)
+  (g', t', e') <- check g e a
+  let b' = apply g' b 
+  return (g', b', applyE g' (ann e' t'))
+
 --  g1,Ea |- [Ea/a]A o e =>> C -| g2
 -- ----------------------------------------- Forall App
 --  g1 |- Forall x.A o e =>> C -| g2
-derive g e t'@(Forall x t) = runDerive "ForallApp" g e t' $ do
-  derive (g +> ExistG x) e (substitute x t)
+derive g e t@(Forall x s) = runDerive "ForallApp" g e t $ do
+  (g', t', e') <- derive (g +> ExistG x) e (substitute x s)
+  return (g', t', ann e' t')
 --  g1[Ea2, Ea1, Ea=Ea1->Ea2] |- e <= Ea1 -| g2
 -- ----------------------------------------- EaApp
 --  g1[Ea] |- Ea o e =>> Ea2 -| g2

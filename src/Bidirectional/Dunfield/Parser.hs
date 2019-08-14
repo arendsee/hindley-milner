@@ -80,10 +80,7 @@ pAnn = do
 pApp :: Parser Expr
 pApp = do
   f <- parens pExpr <|> pVar
-  es <- many1
-     $   parens pExpr
-     <|> pListE <|> try pStrE <|> try pLogE <|> try pNumE <|> try pIntE
-     <|> try pUni <|> pVar
+  es <- many1 pNonStatementExpr
   return $ applyMany f es where
     applyMany f' [] = f' -- this shouldn't happen
     applyMany f' [e] = AppE f' e
