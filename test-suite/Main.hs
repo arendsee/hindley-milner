@@ -113,5 +113,3 @@ unitTests = testGroup "Unit tests"
     -- -- failing tests
     , exprTestBad "[1,2,True]"
   ]
-
-

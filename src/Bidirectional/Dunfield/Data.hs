@@ -131,7 +131,7 @@ data Monotype
 
 data TypeError
   = UnknownError
-  | SubtypeError
+  | SubtypeError Type Type
   | ExistentialError
   | BadExistentialCast
   | AccessError
@@ -252,7 +252,7 @@ instance Pretty TVar where
 
 instance Pretty TypeError where
   pretty UnknownError            = "UnknownError: ???"
-  pretty SubtypeError            = "SubtypeError: ???"
+  pretty (SubtypeError t1 t2)    = "SubtypeError:" <+> pretty t1 <+> "<:" <+> pretty t2
   pretty ExistentialError        = "ExistentialError: probably a bug"
   pretty BadExistentialCast      = "BadExistentialCast"
   pretty AccessError             = "Bad access attempt"

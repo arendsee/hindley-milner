@@ -181,7 +181,7 @@ subtype UniT UniT g = runSubtype "Unit" UniT UniT g $ do
 subtype t1@(VarT a1) t2@(VarT a2) g = runSubtype "<:Var" t1 t2 g $ do
   if (a1 == a2)
   then return g
-  else throwError SubtypeError
+  else throwError $ SubtypeError t1 t2
 --
 -- ----------------------------------------- <:Exvar
 --  G[E.a] |- Ea <: Ea -| G[E.a]
@@ -238,7 +238,7 @@ subtype a b@(ExistT v) g = runSubtype "<:InstantiateR" a b g $ do
   occursCheck a v
   instantiate a b g 
 subtype a b g = runSubtype "<:con" a b g $ do
-  throwError SubtypeError 
+  throwError $ SubtypeError a b 
 
 
 
