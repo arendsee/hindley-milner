@@ -6,7 +6,7 @@ import Data.Text.Prettyprint.Doc
 import qualified Data.Set as Set
 
 typecheck :: Expr -> Stack Expr
-typecheck e = fmap snd $ infer [] e
+typecheck e = fmap (generalizeE . snd) (infer [] e)
 
 run :: Pretty a => Doc' -> [(Doc', Doc')] -> Stack a -> Stack a
 run s args x = do
@@ -59,13 +59,13 @@ runDerive :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr) -> Stack
 runDerive s g e t x
   = run ("derive " <> s) [("g", pretty g), ("e", pretty e), ("t", pretty t)] x
 
-generalize :: Type -> Stack Type
+generalize :: Type -> Type
 generalize t = generalize' existentialMap t
   where 
 
-    generalize' :: [(TVar, TVar)] -> Type -> Stack Type
-    generalize' [] t' = return t'
-    generalize' ((e,r):xs) t' = generalizeOne e r t' >>= generalize' xs
+    generalize' :: [(TVar, TVar)] -> Type -> Type
+    generalize' [] t' = t'
+    generalize' ((e,r):xs) t' = generalize' xs (generalizeOne e r t')
 
     existentialMap
       = zip
@@ -80,18 +80,27 @@ generalize t = generalize' existentialMap t
     findExistentials (FunT t1 t2) = Set.union (findExistentials t1) (findExistentials t2)
     findExistentials (ArrT _ ts) = Set.unions (map findExistentials ts)
 
-    generalizeOne :: TVar -> TVar -> Type -> Stack Type
-    generalizeOne v r t = Forall <$> pure r <*> f v t where
-      f :: TVar -> Type -> Stack Type
+    generalizeOne :: TVar -> TVar -> Type -> Type
+    generalizeOne v r t = Forall r (f v t) where
+      f :: TVar -> Type -> Type
       f v t@(ExistT v')
-        | v == v' = return $ VarT r
-        | otherwise = return t
-      f v (FunT t1 t2) = FunT <$> (f v t1) <*> (f v t2)
+        | v == v' = VarT r
+        | otherwise = t
+      f v (FunT t1 t2) = FunT (f v t1) (f v t2)
       f v t@(Forall x t')
-        | v /= x = Forall <$> pure x <*> f v t'
-        | otherwise = return t
-      f v t@(ArrT v' xs) = ArrT <$> pure v' <*> mapM (f v) xs
-      f _ t = return t
+        | v /= x = Forall x (f v t')
+        | otherwise = t
+      f v t@(ArrT v' xs) = ArrT v' (map (f v) xs)
+      f _ t = t
+
+generalizeE :: Expr -> Expr
+generalizeE (ListE xs) = ListE (map generalizeE xs)
+generalizeE (LamE v e) = LamE v (generalizeE e)
+generalizeE (AppE e1 e2) = AppE (generalizeE e1) (generalizeE e2)
+generalizeE (AnnE e t) = ann (generalizeE e) (generalize t)
+generalizeE (Declaration v e1 e2) = Declaration v (generalizeE e1) (generalizeE e2)
+generalizeE (Signature v t e) = Signature v (generalize t) (generalizeE e)
+generalizeE e = e
 
 
 -- | substitute all appearances of a given variable with an existential
@@ -332,31 +341,30 @@ infer g e@(LogE _) = runInfer "Log=>" g e $ do
 infer g e@(Declaration v e1 e2) = runInfer "Declaration=>" g e $ do
   occursCheckExpr g v
   (g', e1') <- infer g e1
-  t1' <- typeof e1' >>= generalize
+  t1' <- fmap generalize (typeof e1')
   (g'', e2') <- infer (g +> AnnG (VarE v) t1') e2
   return (g'', Declaration v (ann e1 t1') e2')
 infer g e@(Signature v t e2) = runInfer "Signature=>" g e $ do
   (g', e2') <- infer (g +> AnnG (VarE v) t) e2
   return $ (g', Signature v t e2')
 
-{-
-map :: forall a b . (a->b) -> [a] -> [b]
-f :: Int -> Bool
-((map :: (Int -> Bool) -> [Int] -> [Bool]) (f :: Int) ([5,2] :: [Int]) :: Bool)
--}
-
 --
 -- ----------------------------------------- 1l=>
 --  g |- () => 1 -| g
 infer g e@UniE = runInfer "1l=>" g e $ do
   return (g, ann UniE UniT) 
+
 --  (x:A) in g
 -- ----------------------------=>------------- Var
 --  g |- x => A -| g
 infer g e@(VarE _) = runInfer "Var" g e $ do
   case lookupE e g of
     (Just t) -> return (g, ann e t)
-    Nothing  -> throwError UnboundVariable
+    Nothing  -> do
+      v <- newvar
+      return (g, (AnnE e v))
+      -- FIXME: Formalize this in the rules
+
 --  g1,Ea,Eb,x:Ea |- e <= Eb -| g2,x:Ea,g3
 -- ----------------------------------------- -->I=>
 --  g1 |- \x.e => Ea -> Eb
@@ -382,6 +390,7 @@ infer g1 e@(AppE e1 e2) = runInfer "-->E" g1 e $ do
   a <- typeof e1'
   (g3, b, e2') <- derive g2 e2 (apply g2 a)
   return (g3, AnnE (AppE e1' e2') b)
+
 --  g1 |- A
 --  g1 |- e <= A -| g2
 -- ----------------------------------------- Anno
@@ -401,6 +410,7 @@ infer g e1@(AnnE e@(VarE _) t) = runInfer "Anno" g e1 $ do
 infer g e1@(AnnE e t) = runInfer "Anno" g e1 $ do
   (g, _, e') <- check g e t
   return (g, e')
+
 infer g e1@(ListE []) = do
   t <- newvar
   return (g +> t, ann e1 (ArrT (TV "List") [t]))
