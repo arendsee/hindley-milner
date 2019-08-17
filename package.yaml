@@ -15,7 +15,8 @@ dependencies:
 - mtl
 - prettyprinter
 - prettyprinter-ansi-terminal
-- parsec
+- text
+- megaparsec
 
 default-extensions:
   - OverloadedStrings

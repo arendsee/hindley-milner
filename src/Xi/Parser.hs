@@ -1,27 +1,51 @@
-module Bidirectional.Dunfield.Parser (readExpr) where
+module Xi.Parser (readExpr) where
 
-import Bidirectional.Dunfield.Data
-import Text.Parsec
-import qualified Text.ParserCombinators.Parsec.Token as T
-import qualified Text.Parsec.Language as L
+import Xi.Data
+import Text.Megaparsec
+import Text.Megaparsec.Char as C
+import qualified Text.Megaparsec.Char.Lexer as L
+import qualified Data.Text as T
+import Data.Void (Void)
 
-lexer = T.makeTokenParser (L.emptyDef {
-      T.reservedNames = ["forall", "UNIT", "True", "False"]
-    , T.reservedOpNames = ["::", "->", "\\", ".", "=", ";"]
-    , T.identStart = letter
-    , T.identLetter = alphaNum
-  })
+type Parser = Parsec Void T.Text
 
-type Parser = Parsec String ()
+many1 :: Parser a -> Parser [a]
+many1 p = do
+  x <- p
+  xs <- many p
+  return (x:xs)
 
-parens = T.parens lexer
-brackets = T.brackets lexer
-name = T.identifier lexer
-op = T.reservedOp lexer
-keyword = T.reserved lexer
-integer = T.integer lexer
+sc :: Parser ()
+sc = L.space space1 empty empty
 
-readExpr :: String -> Expr
+symbol = L.symbol sc
+
+-- A lexer where space is consumed after every token (but not before)
+lexeme :: Parser a -> Parser a
+lexeme = L.lexeme sc
+
+integer :: Parser Integer
+integer = lexeme $ L.signed sc L.decimal
+
+number :: Parser Double
+number = lexeme $ L.signed sc L.float
+
+parens :: Parser a -> Parser a
+parens p = lexeme $ between (symbol "(") (symbol ")") p
+
+braces :: Parser a -> Parser a
+braces p = lexeme $ between (symbol "{") (symbol "}") p
+
+brackets :: Parser a -> Parser a
+brackets p = lexeme $ between (symbol "[") (symbol "]") p
+
+name :: Parser T.Text
+name = lexeme $ do
+  f <- C.letterChar
+  rs <- many C.alphaNumChar
+  return (T.pack $ f:rs)
+
+readExpr :: T.Text -> Expr
 readExpr s = case parse (pExpr <* eof) "" s of 
   Left err -> error (show err)
   Right expr -> expr
@@ -52,28 +76,28 @@ pStatement = try pDeclaration <|> pSignature
 pDeclaration :: Parser Expr
 pDeclaration = do
   v <- name
-  _ <- op "="
+  _ <- symbol "="
   e1 <- pNonStatementExpr
-  _ <- op ";"
+  _ <- symbol ";"
   e2 <- pExpr
   return (Declaration (EV v) e1 e2)
 
 pSignature :: Parser Expr
 pSignature = do
   v <- name
-  _ <- op "::"
+  _ <- symbol "::"
   t <- pType
-  _ <- op ";"
+  _ <- symbol ";"
   e2 <- pExpr
   return (Signature (EV v) t e2)
 
 pUni :: Parser Expr
-pUni = keyword "UNIT" >> return UniE
+pUni = symbol "UNIT" >> return UniE
 
 pAnn :: Parser Expr
 pAnn = do
   e <- parens pExpr <|> pVar <|> pListE
-  _ <- op "::"
+  _ <- symbol "::"
   t <- pType
   return $ AnnE e t
 
@@ -92,30 +116,24 @@ pIntE = fmap IntE integer
 pLogE :: Parser Expr
 pLogE = pTrue <|> pFalse
   where
-    pTrue = keyword "True" >> return (LogE True)
-    pFalse = keyword "False" >> return (LogE False)
+    pTrue = symbol "True" >> return (LogE True)
+    pFalse = symbol "False" >> return (LogE False)
 
 pStrE :: Parser Expr
 pStrE = do
-  _ <- char '"'
+  _ <- symbol "\""
   s <- many (noneOf ['"'])
-  _ <- char '"'
-  return (StrE s)
+  _ <- symbol "\""
+  return (StrE (T.pack s))
 
 pNumE :: Parser Expr
-pNumE = do
-  s <- option "" (string "-")
-  w <- many digit
-  _ <- char '.'
-  d <- many1 digit
-  let numStr = s ++ w ++ "." ++ d
-  return $ NumE (read numStr :: Double)
+pNumE = fmap NumE number
 
 pLam :: Parser Expr
 pLam = do
-  _ <- op "\\"
+  _ <- symbol "\\"
   vs <- many1 pEVar
-  _ <- op "->"
+  _ <- symbol "->"
   e <- pExpr
   return (curry vs e)
   where
@@ -130,11 +148,11 @@ pEVar = fmap EV name
 
 pType :: Parser Type
 pType
-  =   try pArrT
+  =   try pForAllT
+  <|> try pArrT
   <|> try pFunT
   <|> pListT
   <|> parens pType
-  <|> try pForAllT
   <|> pVarT
 
 pArrT :: Parser Type
@@ -148,8 +166,8 @@ pArrT = do
 pFunT :: Parser Type
 pFunT = do
   t <- pType'
-  _ <- op "->"
-  ts <- sepBy1 pType' (op "->")
+  _ <- symbol "->"
+  ts <- sepBy1 pType' (symbol "->")
   return $ foldr1 FunT (t:ts)
   where
     pType' = parens pType <|> try pArrT <|> pVarT <|> pListT
@@ -162,9 +180,9 @@ pVarT = fmap (VarT . TV) name
 
 pForAllT :: Parser Type
 pForAllT = do
-  _ <- keyword "forall"
+  _ <- symbol "forall"
   vs <- many1 name
-  _ <- op "."
+  _ <- symbol "."
   t <- pType
   return (curry vs t)
   where

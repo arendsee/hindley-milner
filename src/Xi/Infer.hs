@@ -1,8 +1,10 @@
-module Bidirectional.Dunfield.Infer ( typecheck ) where
+module Xi.Infer ( typecheck ) where
 
-import Bidirectional.Dunfield.Data
+import Xi.Data
 import Control.Monad.Trans (liftIO)
 import Data.Text.Prettyprint.Doc
+import Control.Monad (replicateM)
+import qualified Data.Text as T
 import qualified Data.Set as Set
 
 typecheck :: Expr -> Stack Expr
@@ -59,6 +61,9 @@ runDerive :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr) -> Stack
 runDerive s g e t x
   = run ("derive " <> s) [("g", pretty g), ("e", pretty e), ("t", pretty t)] x
 
+foo :: [String]
+foo = [1..] >>= flip replicateM ['a'..'z']
+
 generalize :: Type -> Type
 generalize t = generalize' existentialMap t
   where 
@@ -70,7 +75,9 @@ generalize t = generalize' existentialMap t
     existentialMap
       = zip
         (Set.toList (findExistentials t))
-        (map (TV . return) ['a'..'z'])
+        (map (TV . T.pack) variables)
+
+    variables = [1..] >>= flip replicateM ['a'..'z']
 
     findExistentials :: Type -> Set.Set TVar
     findExistentials UniT = Set.empty

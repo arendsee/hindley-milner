@@ -1,4 +1,4 @@
-module Bidirectional.Dunfield.Data
+module Xi.Data
 (
     Stack
   , Expr(..)
@@ -37,6 +37,7 @@ import qualified Control.Monad.Except as ME
 import qualified Control.Monad.State as MS
 import qualified Control.Monad.Writer as MW
 import qualified Control.Monad.Reader as MR
+import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.Terminal
 import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
@@ -44,7 +45,7 @@ import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
 type Doc' = Doc AnsiStyle
 
 type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s IO))) a
-type Stack a = GeneralStack StackConfig TypeError [String] StackState a
+type Stack a = GeneralStack StackConfig TypeError [T.Text] StackState a
 
 -- | currently I do nothing with the Reader and Writer monads, but I'm leaving
 -- them in for now since I will need them when I plug this all into Morloc.
@@ -54,8 +55,8 @@ runStack e verbosity = do
   return e
 
 type Gamma = [GammaIndex]
-newtype EVar = EV String deriving(Show, Eq, Ord)
-newtype TVar = TV String deriving(Show, Eq, Ord)
+newtype EVar = EV T.Text deriving(Show, Eq, Ord)
+newtype TVar = TV T.Text deriving(Show, Eq, Ord)
 
 data StackState = StackState {
       stateVar :: Int
@@ -98,7 +99,7 @@ data Expr
   -- ^ (e e)
   | AnnE Expr Type
   -- ^ (e : A)
-  | IntE Integer | NumE Double | LogE Bool | StrE String
+  | IntE Integer | NumE Double | LogE Bool | StrE T.Text 
   -- ^ primitives
   | Declaration EVar Expr Expr
   -- ^ x=e1; e2
@@ -214,7 +215,7 @@ newvar = do
   MS.put $ s {stateVar = stateVar s + 1}
   return (ExistT $ TV v)
   where
-    newvars = zipWith (\x y -> x ++ show y) (repeat "t") ([0..] :: [Integer])
+    newvars = zipWith (\x y -> T.pack (x ++ show y)) (repeat "t") ([0..] :: [Integer])
 
 incDepth :: Stack ()
 incDepth = do
@@ -242,7 +243,6 @@ instance Indexable Type where
 instance Indexable Expr where
   index (AnnE x t) = AnnG x t
   index _ = error "Can only index AnnE"
-
 
 instance Pretty EVar where
   pretty (EV n) = pretty n

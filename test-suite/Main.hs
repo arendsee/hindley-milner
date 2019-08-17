@@ -5,43 +5,16 @@ import Test.Tasty.HUnit
 
 import Data.List
 import Data.Ord
-import Bidirectional.Dunfield.Infer
-import Bidirectional.Dunfield.Parser
-import Bidirectional.Dunfield.Data
+import Xi.Infer
+import Xi.Parser
+import Xi.Data
 import Data.Text.Prettyprint.Doc
+import Data.Text (unpack, Text)
 
 main = defaultMain tests
 
 tests :: TestTree
 tests = testGroup "Tests" [unitTests]
-
--- tests :: TestTree
--- tests = testGroup "Tests" [properties, unitTests]
---
--- properties :: TestTree
--- properties = testGroup "Properties" [scProps, qcProps]
---
--- scProps = testGroup "(checked by SmallCheck)"
---   [ SC.testProperty "sort == sort . reverse" $
---       \list -> sort (list :: [Int]) == sort (reverse list)
---   , SC.testProperty "Fermat's little theorem" $
---       \x -> ((x :: Integer)^7 - x) `mod` 7 == 0
---   -- the following property does not hold
---   , SC.testProperty "Fermat's last theorem" $
---       \x y z n ->
---         (n :: Integer) >= 3 SC.==> x^n + y^n /= (z^n :: Integer)
---   ]
---
--- qcProps = testGroup "(checked by QuickCheck)"
---   [ QC.testProperty "sort == sort . reverse" $
---       \list -> sort (list :: [Int]) == sort (reverse list)
---   , QC.testProperty "Fermat's little theorem" $
---       \x -> ((x :: Integer)^7 - x) `mod` 7 == 0
---   -- the following property does not hold
---   , QC.testProperty "Fermat's last theorem" $
---       \x y z n ->
---         (n :: Integer) >= 3 QC.==> x^n + y^n /= (z^n :: Integer)
---   ]
 
 -- get the toplevel type of a fully annotated expression
 typeof :: Expr -> Type
@@ -51,19 +24,19 @@ typeof (AnnE _ t) = t
 typeof (AppE _ t) = typeof t
 typeof t = error ("No annotation found for: " <> show t)
 
-exprTestGood :: String -> Type -> TestTree
-exprTestGood e t = testCase e (do
+exprTestGood :: Text -> Type -> TestTree
+exprTestGood e t = testCase (unpack e) (do
     x <- runStack (typecheck (readExpr e)) 0
     case x of
       (Right e) -> assertEqual "" t (typeof e)
       (Left err) -> error (show err)
   )
 
-exprTestBad :: String -> TestTree
-exprTestBad e = testCase ("Fails?: " <> e) (do
+exprTestBad :: Text -> TestTree
+exprTestBad e = testCase ("Fails?: " <> unpack e) (do
     x <- runStack (typecheck (readExpr e)) 0
     case x of
-      (Right t') -> assertFailure $ "Expected '" <> e <> "' to fail"
+      (Right t') -> assertFailure . unpack $ "Expected '" <> e <> "' to fail"
       (Left _) -> return ()
   )
 
