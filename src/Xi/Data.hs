@@ -27,6 +27,7 @@ module Xi.Data
   , newvar
   -- * Pretty printing
   , Doc'
+  , prettyExpr
   -- * Config handling
   , verbosity
 ) where
@@ -229,6 +230,33 @@ decDepth = do
 
 depth :: Stack Int
 depth = MS.gets stateDepth
+
+
+typeStyle = SetAnsiStyle {
+      ansiForeground  = Just (Vivid, Green) -- ^ Set the foreground color, or keep the old one.
+    , ansiBackground  = Nothing             -- ^ Set the background color, or keep the old one.
+    , ansiBold        = Nothing             -- ^ Switch on boldness, or don’t do anything.
+    , ansiItalics     = Nothing             -- ^ Switch on italics, or don’t do anything.
+    , ansiUnderlining = Just Underlined     -- ^ Switch on underlining, or don’t do anything.
+  } 
+
+prettyType :: Pretty a => a -> Doc AnsiStyle 
+prettyType x = annotate typeStyle (pretty x)
+
+prettyExpr :: Expr -> Doc AnsiStyle
+prettyExpr UniE = "()"
+prettyExpr (VarE (EV s)) = pretty s
+prettyExpr (LamE (EV n) e) = "\\" <> pretty n <+> "->" <+> prettyExpr e
+prettyExpr (AnnE e t) = parens (prettyExpr e <+> "::" <+> prettyType t)
+prettyExpr (AppE e1@(LamE _ _) e2) = parens (prettyExpr e1) <+> prettyExpr e2
+prettyExpr (AppE e1 e2) = prettyExpr e1 <+> prettyExpr e2
+prettyExpr (IntE x) = pretty x
+prettyExpr (NumE x) = pretty x
+prettyExpr (StrE x) = dquotes (pretty x)
+prettyExpr (LogE x) = pretty x
+prettyExpr (Declaration v e1 e2) = pretty v <+> "=" <+> prettyExpr e1 <> line <> prettyExpr e2
+prettyExpr (Signature v t e2) = pretty v <+> "::" <+> prettyType t <> line <> prettyExpr e2
+prettyExpr (ListE xs) = list (map prettyExpr xs)
 
 class Indexable a where
   index :: a -> GammaIndex
