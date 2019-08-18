@@ -33,9 +33,6 @@ number = lexeme $ L.signed sc L.float
 parens :: Parser a -> Parser a
 parens p = lexeme $ between (symbol "(") (symbol ")") p
 
-braces :: Parser a -> Parser a
-braces p = lexeme $ between (symbol "{") (symbol "}") p
-
 brackets :: Parser a -> Parser a
 brackets p = lexeme $ between (symbol "[") (symbol "]") p
 
@@ -135,10 +132,10 @@ pLam = do
   vs <- many1 pEVar
   _ <- symbol "->"
   e <- pExpr
-  return (curry vs e)
+  return (curryLamE vs e)
   where
-    curry [] e' = e'
-    curry (v:vs') e' = LamE v (curry vs' e') 
+    curryLamE [] e' = e'
+    curryLamE (v:vs') e' = LamE v (curryLamE vs' e') 
 
 pVar :: Parser Expr
 pVar = fmap VarE pEVar
@@ -184,7 +181,7 @@ pForAllT = do
   vs <- many1 name
   _ <- symbol "."
   t <- pType
-  return (curry vs t)
+  return (curryForall vs t)
   where
-    curry [] e' = e'
-    curry (v:vs') e' =  Forall (TV v) (curry vs' e') 
+    curryForall [] e' = e'
+    curryForall (v:vs') e' =  Forall (TV v) (curryForall vs' e') 

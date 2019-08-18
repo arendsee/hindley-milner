@@ -51,9 +51,9 @@ type Stack a = GeneralStack StackConfig TypeError [T.Text] StackState a
 -- | currently I do nothing with the Reader and Writer monads, but I'm leaving
 -- them in for now since I will need them when I plug this all into Morloc.
 runStack :: Stack a -> Int -> IO (Either TypeError a)
-runStack e verbosity = do
-  ((e, _), _) <- MS.runStateT(MW.runWriterT(ME.runExceptT(MR.runReaderT e (StackConfig verbosity)))) emptyState
-  return e
+runStack e verbosity' = do
+  ((e', _), _) <- MS.runStateT(MW.runWriterT(ME.runExceptT(MR.runReaderT e (StackConfig verbosity')))) emptyState
+  return e'
 
 type Gamma = [GammaIndex]
 newtype EVar = EV T.Text deriving(Show, Eq, Ord)
@@ -299,7 +299,7 @@ instance Pretty Type where
   pretty (VarT (TV s)) = pretty s
   pretty (FunT t1@(FunT _ _) t2) = parens (pretty t1) <+> "->" <+> pretty t2
   pretty (FunT t1 t2) = pretty t1 <+> "->" <+> pretty t2
-  pretty t@(Forall (TV s) t') = "forall" <+> hsep (forallVars t) <+> "." <+> forallBlock t
+  pretty t@(Forall _ _) = "forall" <+> hsep (forallVars t) <+> "." <+> forallBlock t
   pretty (ExistT e) = "<" <> pretty e <> ">"
   pretty (ArrT v ts) = pretty v <+> hsep (map pretty ts)
 
@@ -308,7 +308,7 @@ forallVars (Forall s t) = pretty s : forallVars t
 forallVars _ = []
 
 forallBlock :: Type -> Doc a
-forallBlock (Forall s t) = forallBlock t
+forallBlock (Forall _ t) = forallBlock t
 forallBlock t = pretty t
 
 instance Pretty Expr where

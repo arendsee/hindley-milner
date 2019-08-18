@@ -24,18 +24,18 @@ run s args x = do
   where
     run1 v d'
       | v < 2 = return ()
-      | v == 2 = do
+      | otherwise = do
         liftIO . print $ pretty (take d' $ repeat '>') <+> s
         mapM writeArg args
         return ()
     run2 v d'
       | v < 2 = return ()
-      | v == 2 = do
+      | otherwise = do
         liftIO . print $ pretty (take d' $ repeat '<') <+> s
-    run3 v x
+    run3 v x'
       | v < 2 = return ()
-      | v == 2 = do
-        liftIO . print $ "  return:" <+> pretty x
+      | otherwise = do
+        liftIO . print $ "  return:" <+> pretty x'
 
 writeArg :: (Doc', Doc') -> Stack ()
 writeArg (name, arg) = do
@@ -61,9 +61,6 @@ runDerive :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr) -> Stack
 runDerive s g e t x
   = run ("derive " <> s) [("g", pretty g), ("e", pretty e), ("t", pretty t)] x
 
-foo :: [String]
-foo = [1..] >>= flip replicateM ['a'..'z']
-
 generalize :: Type -> Type
 generalize t = generalize' existentialMap t
   where 
@@ -83,22 +80,22 @@ generalize t = generalize' existentialMap t
     findExistentials UniT = Set.empty
     findExistentials (VarT _) = Set.empty
     findExistentials (ExistT v) = Set.singleton v
-    findExistentials (Forall v t) = Set.delete v (findExistentials t)
+    findExistentials (Forall v t') = Set.delete v (findExistentials t')
     findExistentials (FunT t1 t2) = Set.union (findExistentials t1) (findExistentials t2)
     findExistentials (ArrT _ ts) = Set.unions (map findExistentials ts)
 
     generalizeOne :: TVar -> TVar -> Type -> Type
-    generalizeOne v r t = Forall r (f v t) where
+    generalizeOne v0 r t0 = Forall r (f v0 t0) where
       f :: TVar -> Type -> Type
-      f v t@(ExistT v')
+      f v t1@(ExistT v')
         | v == v' = VarT r
-        | otherwise = t
+        | otherwise = t1
       f v (FunT t1 t2) = FunT (f v t1) (f v t2)
-      f v t@(Forall x t')
-        | v /= x = Forall x (f v t')
-        | otherwise = t
-      f v t@(ArrT v' xs) = ArrT v' (map (f v) xs)
-      f _ t = t
+      f v t1@(Forall x t2)
+        | v /= x = Forall x (f v t2)
+        | otherwise = t1
+      f v (ArrT v' xs) = ArrT v' (map (f v) xs)
+      f _ t1 = t1
 
 generalizeE :: Expr -> Expr
 generalizeE (ListE xs) = ListE (map generalizeE xs)
@@ -120,7 +117,7 @@ substitute v (FunT t1 t2) = FunT (substitute v t1) (substitute v t2)
 substitute v t@(Forall x t')
   | v /= x = Forall x (substitute v t')
   | otherwise = t -- allows shadowing of the variable
-substitute v t@(ArrT v' ts) = ArrT v' (map (substitute v) ts)
+substitute v (ArrT v' ts) = ArrT v' (map (substitute v) ts)
 substitute _ t = t
 
 
@@ -151,7 +148,7 @@ applyE _ e = e
 
 -- | Ensure a given type variable is not free within a given type
 occursCheck :: Type -> TVar -> Stack ()
-occursCheck UniT v = return ()
+occursCheck UniT _ = return ()
 occursCheck (VarT v') v 
   | v' == v = throwError OccursCheckFail
   | otherwise = return ()
@@ -164,16 +161,18 @@ occursCheck (Forall v' t) v
 occursCheck (ExistT v') v
   | v' == v = throwError OccursCheckFail -- existentials count
   | otherwise = return ()
-occursCheck (ArrT v' (t:ts)) v
+occursCheck (ArrT _ []) _ = return ()
+occursCheck (ArrT v' ts) v
   | v' == v = throwError OccursCheckFail
   | otherwise = mapM_ (flip occursCheck $ v) ts
 
 
-occursCheckExpr :: Gamma -> EVar -> Stack EVar
-occursCheckExpr [] v = return v
+occursCheckExpr :: Gamma -> EVar -> Stack ()
+occursCheckExpr [] _ = return ()
 occursCheckExpr ((AnnG (VarE v') _):gs) v
   | v' == v = throwError ToplevelRedefinition
   | otherwise = occursCheckExpr gs v
+occursCheckExpr _ _ = return ()
 
 -- | type 1 is more polymorphic than type 2 (Dunfield Figure 9)
 subtype :: Type -> Type -> Gamma -> Stack Gamma
@@ -189,13 +188,19 @@ subtype t1@(VarT a1) t2@(VarT a2) g = runSubtype "<:Var" t1 t2 g $ do
   if (a1 == a2)
   then return g
   else throwError $ SubtypeError t1 t2
---
--- ----------------------------------------- <:Exvar
---  G[E.a] |- Ea <: Ea -| G[E.a]
-subtype a@(ExistT a1) b@(ExistT a2) g = runSubtype "<:Exvar" a b g $ do
-  if (a1 == a2)
-  then return g
-  else instantiate a b g
+subtype a@(ExistT a1) b@(ExistT a2) g
+  --
+  -- ----------------------------------------- <:Exvar
+  --  G[E.a] |- Ea <: Ea -| G[E.a]
+  | a1 == a2 = runSubtype "<:Exvar" a b g $ return g
+  --
+  -- ----------------------------------------- <:InstantiateL/<:InstantiateR
+  --  G[E.a] |- Ea <: Ea -| G[E.a]
+  | otherwise = runSubtype "<:InstantiateL" a b g $ do
+      -- formally, an `Ea notin FV(G)` check should be done here, but since the
+      -- types involved are all existentials, it will always pass, so I omit
+      -- it.
+      instantiate a b g 
 --  g1 |- B1 <: A1 -| g2
 --  g2 |- [g2]A2 <: [g2]B2 -| g3
 -- ----------------------------------------- <:-->
@@ -226,9 +231,9 @@ subtype t1@(ArrT v1 vs1) t2@(ArrT v2 vs2) g = runSubtype "<:App" t1 t2 g $ do
   where
     compareArr :: [Type] -> [Type] -> Gamma -> Stack Gamma
     compareArr [] [] g' = return g'
-    compareArr (t1:ts1) (t2:ts2) g' = do
-      g'' <- subtype t1 t2 g'
-      compareArr ts1 ts2 g''
+    compareArr (t1':ts1') (t2':ts2') g' = do
+      g'' <- subtype t1' t2' g'
+      compareArr ts1' ts2' g''
     compareArr _ _ _ = throwError UnkindJackass
 --  Ea not in FV(a)
 --  g1[Ea] |- Ea <=: A -| g2
@@ -347,7 +352,7 @@ infer g e@(LogE _) = runInfer "Log=>" g e $ do
   return (g, ann e t)
 infer g e@(Declaration v e1 e2) = runInfer "Declaration=>" g e $ do
   occursCheckExpr g v
-  (g', e1') <- infer g e1
+  (_, e1') <- infer g e1
   t1' <- fmap generalize (typeof e1')
   (g'', e2') <- infer (g +> AnnG (VarE v) t1') e2
   return (g'', Declaration v (ann e1 t1') e2')
@@ -415,8 +420,8 @@ infer g e1@(AnnE e@(VarE _) t) = runInfer "Anno" g e1 $ do
       return (g, e1)
     Nothing -> return (g, e1)
 infer g e1@(AnnE e t) = runInfer "Anno" g e1 $ do
-  (g, _, e') <- check g e t
-  return (g, e')
+  (g', _, e') <- check g e t
+  return (g', e')
 
 infer g e1@(ListE []) = do
   t <- newvar
@@ -464,7 +469,7 @@ check g1 e b = runCheck "Sub" g1 e b $ do
   a <- typeof e'
   g3 <- subtype (apply g2 a) (apply g2 b) g2
   let a' = apply g3 a
-  return (g3, apply g3 a, ann (applyE g3 e') a)
+  return (g3, apply g3 a', ann (applyE g3 e') a')
 
 derive :: Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr)
 --  g1 |- e <= A -| g2
