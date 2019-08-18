@@ -416,8 +416,8 @@ infer g e1@(AnnE e@(VarE _) t) = runInfer "Anno" g e1 $ do
   -- should add dedicated syntax for axiomatic type declarations?
   case lookupE e g of
     (Just _) -> do
-      check g e t
-      return (g, e1)
+      (g', _, e') <- check g e t
+      return (g', e')
     Nothing -> return (g, e1)
 infer g e1@(AnnE e t) = runInfer "Anno" g e1 $ do
   (g', _, e') <- check g e t
@@ -459,7 +459,7 @@ check g r1@(LamE v e) r2@(FunT a b) = runCheck "-->I" g r1 r2 $ do
 check g1 e r2@(Forall x a) = runCheck "Forall.I" g1 e r2 $ do
   (g', t', e') <- check (g1 +> VarG x) e a
   g2 <- cut (VarG x) g'
-  return (g2, t', ann e' t')
+  return (g2, t', ann e' (apply g2 r2))
 --  g1 |- e => A -| g2
 --  g2 |- [g2]A <: [g2]B -| g3
 -- ----------------------------------------- Sub
@@ -478,14 +478,14 @@ derive :: Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr)
 derive g e t@(FunT a b) = runDerive "-->App" g e t $ do
   (g', t', e') <- check g e a
   let b' = apply g' b 
-  return (g', b', applyE g' (ann e' t'))
+  return (g', b', applyE g' (ann e (apply g' t)))
 
 --  g1,Ea |- [Ea/a]A o e =>> C -| g2
 -- ----------------------------------------- Forall App
 --  g1 |- Forall x.A o e =>> C -| g2
 derive g e t@(Forall x s) = runDerive "ForallApp" g e t $ do
   (g', t', e') <- derive (g +> ExistG x) e (substitute x s)
-  return (g', t', ann e' t')
+  return (g', t', ann e' (apply g' t))
 --  g1[Ea2, Ea1, Ea=Ea1->Ea2] |- e <= Ea1 -| g2
 -- ----------------------------------------- EaApp
 --  g1[Ea] |- Ea o e =>> Ea2 -| g2
