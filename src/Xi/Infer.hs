@@ -8,7 +8,7 @@ import qualified Data.Text as T
 import qualified Data.Set as Set
 
 typecheck :: Expr -> Stack Expr
-typecheck e = fmap (generalizeE . snd) (infer [] e)
+typecheck e = fmap (generalizeE . (\(_, _, e) -> e)) (infer [] e)
 
 run :: Pretty a => Doc' -> [(Doc', Doc')] -> Stack a -> Stack a
 run s args x = do
@@ -49,17 +49,17 @@ runInstantiate :: Doc' -> Type -> Type -> Gamma -> Stack Gamma -> Stack Gamma
 runInstantiate s t1 t2 g x
   = run ("instantiate " <> s) [("ta", pretty t1), ("tb", pretty t2), ("g", pretty g)] x
 
-runInfer :: Doc' -> Gamma -> Expr -> Stack (Gamma, Expr) -> Stack (Gamma, Expr)
+runInfer :: Doc' -> Gamma -> Expr -> Stack (Gamma, Type, Expr) -> Stack (Gamma, Type, Expr)
 runInfer s g e x = do
-  run ("infer " <> s) [("g", pretty g), ("e", pretty e)] x
+  run ("infer " <> s) [("g", pretty g), ("e", pretty (show e))] x
 
 runCheck :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr) -> Stack (Gamma, Type, Expr)
 runCheck s g e t x
-  = run ("check " <> s) [("g", pretty g), ("e", pretty e), ("t", pretty t)] x
+  = run ("check " <> s) [("g", pretty g), ("e", pretty (show e)), ("t", pretty t)] x
 
 runDerive :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr) -> Stack (Gamma, Type, Expr)
 runDerive s g e t x
-  = run ("derive " <> s) [("g", pretty g), ("e", pretty e), ("t", pretty t)] x
+  = run ("derive " <> s) [("g", pretty g), ("e", pretty (show e)), ("t", pretty t)] x
 
 generalize :: Type -> Type
 generalize t = generalize' existentialMap t
@@ -144,7 +144,12 @@ applyE g (AppE e1 e2) = AppE (applyE g e1) (applyE g e2)
 applyE g (AnnE e t) = ann (applyE g e) (apply g t)
 applyE g (Declaration v e1 e2) = Declaration v (applyE g e1) (applyE g e2)
 applyE g (Signature v t e) = Signature v (apply g t) (applyE g e)
-applyE _ e = e
+applyE _ e@(VarE _) = e
+applyE _ e@(IntE _) = e
+applyE _ e@(NumE _) = e
+applyE _ e@(StrE _) = e
+applyE _ e@(LogE _) = e
+applyE _ UniE = UniE
 
 -- | Ensure a given type variable is not free within a given type
 occursCheck :: Type -> TVar -> Stack ()
@@ -328,69 +333,67 @@ instantiate ta@(ExistT v) tb g1 = runInstantiate "instLSolve" ta tb g1 $ do
 instantiate t1 t2 g = runInstantiate "error" t1 t2 g $ do
   return g
 
--- get the toplevel type of a fully annotated expression
-typeof :: Expr -> Stack Type
-typeof (Declaration _ _ e) = typeof e
-typeof (Signature _ _ e) = typeof e
-typeof (AnnE _ t) = return t
-typeof _ = throwError NoAnnotationFound
-
-
-infer :: Gamma -> Expr -> Stack (Gamma, Expr)
--- handle primitives
+infer
+  :: Gamma
+  -> Expr -- ^ A subexpression from the original expression
+  -> Stack (
+      Gamma
+    , Type -- The return type
+    , Expr -- The annotated expression
+  )
+-- --
+-- ----------------------------------------- <primitive>
+--  g |- <primitive expr> => <primitive type> -| g
+-- --
+infer g e@UniE = runInfer "Unit=>" g e $ do
+  return (g, UniT, ann UniE UniT) 
 infer g e@(NumE _) = runInfer "Num=>" g e $ do
   let t = VarT (TV "Num")
-  return (g, ann e t)
+  return (g, t, ann e t)
 infer g e@(IntE _) = runInfer "Int=>" g e $ do
   let t = VarT (TV "Int")
-  return (g, ann e t)
+  return (g, t, ann e t)
 infer g e@(StrE _) = runInfer "Str=>" g e $ do
   let t = VarT (TV "Str")
-  return (g, ann e t)
+  return (g, t, ann e t)
 infer g e@(LogE _) = runInfer "Log=>" g e $ do
   let t = VarT (TV "Bool")
-  return (g, ann e t)
+  return (g, t, ann e t)
+
+-- ----------------------------------------- Declaration=>
 infer g e@(Declaration v e1 e2) = runInfer "Declaration=>" g e $ do
   occursCheckExpr g v
-  (_, e1') <- infer g e1
-  t1' <- fmap generalize (typeof e1')
-  (g'', e2') <- infer (g +> AnnG (VarE v) t1') e2
-  return (g'', Declaration v (ann e1 t1') e2')
-infer g e@(Signature v t e2) = runInfer "Signature=>" g e $ do
-  (g', e2') <- infer (g +> AnnG (VarE v) t) e2
-  return $ (g', Signature v t e2')
+  (_, t1', e1') <- infer g e1
+  (g'', t2', e2') <- infer (g +> AnnG (VarE v) (generalize t1')) e2
+  return (g'', t2', Declaration v (generalizeE e1') e2')
 
---
--- ----------------------------------------- 1l=>
---  g |- () => 1 -| g
-infer g e@UniE = runInfer "1l=>" g e $ do
-  return (g, ann UniE UniT) 
+-- ----------------------------------------- Signature=>
+infer g e@(Signature v t e2) = runInfer "Signature=>" g e $ do
+  (g', t', e2') <- infer (g +> AnnG (VarE v) t) e2
+  return $ (g', t', Signature v t e2')
 
 --  (x:A) in g
--- ----------------------------=>------------- Var
+-- ------------------------------------------- Var
 --  g |- x => A -| g
-infer g e@(VarE _) = runInfer "Var" g e $ do
+infer g e@(VarE v) = runInfer "Var" g e $ do
   case lookupE e g of
-    (Just t) -> return (g, ann e t)
-    Nothing  -> do
-      v <- newvar
-      return (g, (AnnE e v))
-      -- FIXME: Formalize this in the rules
+    (Just t) -> return (g, t, ann e t)
+    Nothing -> throwError (UnboundVariable v)
 
 --  g1,Ea,Eb,x:Ea |- e <= Eb -| g2,x:Ea,g3
 -- ----------------------------------------- -->I=>
---  g1 |- \x.e => Ea -> Eb
+--  g1 |- \x.e => Ea -> Eb -| g2
 infer g1 e@(LamE v e2) = runInfer "-->I=>" g1 e $ do
   a <- newvar
   b <- newvar
   let anng = AnnG (VarE v) a
       g' = g1 +> a +> b +> anng
-  (g'', _, e2') <- check g' e2 b
-  t <- typeof e2'
+  (g'', t, e2') <- check g' e2 b
   case lookupE (VarE v) g'' of
     (Just a') -> do
       g2 <- cut anng g''
-      return (g2, ann (LamE v e2') (FunT a' t))
+      let t' = FunT a' t
+      return (g2, t', ann (LamE v e2') t')
     Nothing -> throwError UnknownError
 
 --  g1 |- e1 => A -| g2
@@ -398,10 +401,9 @@ infer g1 e@(LamE v e2) = runInfer "-->I=>" g1 e $ do
 -- ----------------------------------------- -->E
 --  g1 |- e1 e2 => C -| g3
 infer g1 e@(AppE e1 e2) = runInfer "-->E" g1 e $ do
-  (g2, e1') <- infer g1 e1
-  a <- typeof e1'
-  (g3, b, e2') <- derive g2 e2 (apply g2 a)
-  return (g3, AnnE (AppE e1' e2') b)
+  (g2, a, e1') <- infer g1 e1
+  (g3, c, e2') <- derive g2 e2 (apply g2 a)
+  return (g3, c, AnnE (AppE e1' e2') c)
 
 --  g1 |- A
 --  g1 |- e <= A -| g2
@@ -415,26 +417,32 @@ infer g e1@(AnnE e@(VarE _) t) = runInfer "Anno" g e1 $ do
   -- langugaes, to be able to simply declare a type as an axiom. Perhaps I
   -- should add dedicated syntax for axiomatic type declarations?
   case lookupE e g of
-    (Just _) -> do
-      (g', _, e') <- check g e t
-      return (g', e')
-    Nothing -> return (g, e1)
+    (Just _) -> check g e t
+    Nothing -> return (g, t, e1)
 infer g e1@(AnnE e t) = runInfer "Anno" g e1 $ do
-  (g', _, e') <- check g e t
-  return (g', e')
+  check g e t
 
 infer g e1@(ListE []) = do
   t <- newvar
-  return (g +> t, ann e1 (ArrT (TV "List") [t]))
+  let t' = ArrT (TV "List") [t]
+  return (g +> t, t', ann e1 t')
 infer g e1@(ListE (x:xs)) = do 
-  (g', e') <- infer g x
-  t' <- typeof e'
+  (g', t', e') <- infer g x
   mapM (\x' -> check g x' t') xs 
-  return (g', ann e1 (ArrT (TV "List") [t']))
+  let t'' = ArrT (TV "List") [t']
+  return (g', t'', ann e1 t'')
 
 
 -- | Pattern matches against each type
-check :: Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr)
+check
+  :: Gamma
+  -> Expr -- ^ An expression which should be of the type given
+  -> Type -- ^ The expected type of the expression
+  -> Stack (
+      Gamma
+    , Type -- The inferred type of the expression
+    , Expr -- The annotated expression
+  )
 --
 -- ----------------------------------------- 1l
 --  g |- () <= 1 -| g
@@ -452,40 +460,48 @@ check g r1@(LamE v e) r2@(FunT a b) = runCheck "-->I" g r1 r2 $ do
   (g', t', e') <- check (g +> anng) e b
   -- ignore the trailing context and (x:A), since it is out of scope
   g2 <- cut anng g'
-  return (g2, t', ann (LamE v e') (apply g2 r2))
+  let t'' = FunT a t'
+  return (g2, t'', ann (LamE v e') t'')
 --  g1,x |- e <= A -| g2,x,g3
 -- ----------------------------------------- Forall.I
 --  g1 |- e <= Forall x.A -| g2
 check g1 e r2@(Forall x a) = runCheck "Forall.I" g1 e r2 $ do
   (g', t', e') <- check (g1 +> VarG x) e a
   g2 <- cut (VarG x) g'
-  return (g2, t', ann e' (apply g2 r2))
+  let t'' = apply g2 r2
+  return (g2, t'', ann e' t'')
 --  g1 |- e => A -| g2
 --  g2 |- [g2]A <: [g2]B -| g3
 -- ----------------------------------------- Sub
 --  g1 |- e <= B -| g3
 check g1 e b = runCheck "Sub" g1 e b $ do
-  (g2, e') <- infer g1 e
-  a <- typeof e'
+  (g2, a, e') <- infer g1 e
   g3 <- subtype (apply g2 a) (apply g2 b) g2
   let a' = apply g3 a
-  return (g3, apply g3 a', ann (applyE g3 e') a')
+  return (g3, a', ann (applyE g3 e') a')
 
-derive :: Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr)
+derive
+  :: Gamma
+  -> Expr -- the expression that is passed to the function
+  -> Type -- the function type
+  -> Stack (
+        Gamma
+      , Type -- @b@, the function output type after context application
+      , Expr -- @e@, with type annotation
+  )
 --  g1 |- e <= A -| g2
 -- ----------------------------------------- -->App
 --  g1 |- A->C o e =>> C -| g2
 derive g e t@(FunT a b) = runDerive "-->App" g e t $ do
   (g', t', e') <- check g e a
-  let b' = apply g' b 
-  return (g', b', applyE g' (ann e (apply g' t)))
+  return (g', apply g' b, e')
 
 --  g1,Ea |- [Ea/a]A o e =>> C -| g2
 -- ----------------------------------------- Forall App
 --  g1 |- Forall x.A o e =>> C -| g2
 derive g e t@(Forall x s) = runDerive "ForallApp" g e t $ do
-  (g', t', e') <- derive (g +> ExistG x) e (substitute x s)
-  return (g', t', ann e' (apply g' t))
+  derive (g +> ExistG x) e (substitute x s)
+
 --  g1[Ea2, Ea1, Ea=Ea1->Ea2] |- e <= Ea1 -| g2
 -- ----------------------------------------- EaApp
 --  g1[Ea] |- Ea o e =>> Ea2 -| g2
@@ -493,6 +509,8 @@ derive g e t'@(ExistT v) = runDerive "EaApp" g e t' $ do
   a <- newvar
   b <- newvar
   let g' = g +> a +> b +> SolvedG v (FunT a b)
-  check g' e a
+  (g'', t', e') <- check g' e a
+  return (g'', apply g'' b, applyE g'' e)
+
 derive g e t = runDerive "unexpected" g e t $ do
   throwError NonFunctionDerive

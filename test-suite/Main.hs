@@ -75,6 +75,7 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "x :: Int" int
     , exprTestGood "xs :: Foo a" (arr "Foo" [var "a"])
     , exprTestGood "f :: forall a . a -> a; f 42" int
+    , exprTestGood "apply :: (Int -> Bool) -> Int -> Bool; f :: Int -> Bool; apply f 42"  bool 
     , exprTestGood "apply :: forall a b . (a->b) -> a -> b; f :: Int -> Bool; apply f 42" bool
     , exprTestGood "[1,2,3]" (lst int)
     , exprTestGood "[]" (forall ["a"] (lst (var "a")))
@@ -83,4 +84,5 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "map :: forall a b . (a->b) -> [a] -> [b]; f :: Int -> Bool; map f [5,2]" (lst bool)
     -- -- failing tests
     , exprTestBad "[1,2,True]"
+    , exprTestBad "\\x -> y" -- unbound variable
   ]

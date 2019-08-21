@@ -101,11 +101,17 @@ pAnn = do
 pApp :: Parser Expr
 pApp = do
   f <- parens pExpr <|> pVar
-  es <- many1 pNonStatementExpr
-  return $ applyMany f es where
-    applyMany f' [] = f' -- this shouldn't happen
-    applyMany f' [e] = AppE f' e
-    applyMany f' (e:es') = applyMany (AppE f' e) es'
+  (e:es) <- many1 s
+  return $ foldl AppE (AppE f e) es
+  where
+    s =   parens pExpr
+      <|> try pUni
+      <|> try pStrE
+      <|> try pLogE
+      <|> try pNumE
+      <|> try pIntE
+      <|> pListE
+      <|> pVar
 
 pIntE :: Parser Expr
 pIntE = fmap IntE integer

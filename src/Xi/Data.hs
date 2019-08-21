@@ -138,7 +138,7 @@ data TypeError
   | BadExistentialCast
   | AccessError
   | NonFunctionDerive
-  | UnboundVariable
+  | UnboundVariable EVar
   | OccursCheckFail
   | EmptyCut
   | TypeMismatch
@@ -285,7 +285,7 @@ instance Pretty TypeError where
   pretty BadExistentialCast      = "BadExistentialCast"
   pretty AccessError             = "Bad access attempt"
   pretty NonFunctionDerive       = "Derive should only be called on function applications"
-  pretty UnboundVariable         = "Unbound variable"
+  pretty (UnboundVariable v)     = "Unbound variable:" <+> pretty v
   pretty OccursCheckFail         = "OccursCheckFail"
   pretty EmptyCut                = "EmptyCut - probably a logic bug"
   pretty TypeMismatch            = "TypeMismatch"
