@@ -2,7 +2,6 @@
 :source-highlighter: pygments
 :pygments-style: emacs
 :bibtex-file: references.bib
-:stem: latexmath
 :bibtex-style: cambridge-university-press-numeric.csl
 :bibtex-order: appearance
 
@@ -12,108 +11,118 @@ indicated, are taken directly from their paper.
 
 == Grammar
 
+terms:: $\quad\quad e\ :=\ ()\ |\ x\ |\ \lambda x .\ e\ |\ e e\ |\ e\ :\ A\ |\ x=e\ ;\ e\ |\ x\ ::\ A\ ; e$
+types:: $\quad\quad A,B,C\ :=\ 1\ |\ \alpha\ |\ A \rightarrow B\ |\ \forall \alpha. A\ |\ \alpha\ A$
+
+== Algorithmic Rules
+
+=== Subtyping and instantiation
+
+.Subtyping Rules
 |===
-<| +terms+ latexmath:[\quad\quad e\ :=\ ()\ \|\ x\ \|\ \lambda x .\ e\ \|\ e e\ \|\ e\ :\ A\ \|\ x=e\ ;\ e\ \|x\ ::\ A\ ; e]
-<| +types+ latexmath:[\quad\quad A,B,C\ :=\ 1\ \|\ \alpha\ \|\ A \rightarrow B\ \|\ \forall \alpha. A\ \|\ \alpha\ A]
+^| $\frac{}{\Gamma[\alpha\]\ \vdash\ \alpha\ <:\ \alpha\ \dashv\ \Gamma[\alpha\]}$ [green]+<:Var+
+  $\quad\quad$
+  $\frac{}{\Gamma\ \vdash\ 1\ <:\ 1\ \dashv\ \Gamma}$ [green]+<:Unit+
+  $\quad\quad$
+  $\frac{}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ <:\ \widehat{\alpha}\ \dashv\ \Gamma[\widehat{\alpha}\]}$ [green]+<:Exvar+
+  +
+  +
+  $\frac{\Gamma\ \vdash\ B_1\ <:\ A_1\ \dashv\ \Theta \quad \Theta\ \vdash\ [\Theta\]A_2\ <:\ [\Theta\]B_2\ \dashv\ \Delta}{\Gamma\ \vdash\ A_1 \rightarrow A_2\ <:\ B_1 \rightarrow B_2\ \dashv\ \Delta}$ [green]+<:→+
+  +
+  +
+  $\frac{A_1\ <:\ B_1 \quad A_2\ <:\ B_2}{\Gamma\ \vdash\ A_1\ A_2\ <:\ B_1\ B_2 \dashv\ \Delta}$ [blue]+<:App+
+  +
+  +
+  $\frac{\Gamma,\blacktriangleright \widehat{\alpha},\widehat{\alpha}\ \vdash\ [\widehat{\alpha}/\alpha\]A\ <:\ B \dashv \Delta,\blacktriangleright \widehat{\alpha}, \Theta}{\Gamma\ \vdash\ \forall \alpha . A\ <:\ B\ \dashv\ \Delta}$ [green]+<:∀L+
+  $\quad\quad$
+  $\frac{\Gamma,\alpha\ \vdash\ A<:B\ \dashv\ \Delta,\alpha,\Theta}{\Gamma\ \vdash\ A <: \forall \alpha . B\ \dashv\ \Delta}$ [green]+<:∀R+
+  +
+  +
+  $\frac{\widehat{\alpha} \notin FV(A) \quad \Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ :\leqq\ A\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ <:\ A\ \dashv\ \Delta}$ [green]+<:InstantiateL+
+  $\quad\quad$
+  $\frac{\widehat{\alpha} \notin FV(A) \quad \Gamma[\widehat{\alpha}\]\ \vdash\ A\ :\leqq\ \widehat{\alpha}\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ A\ <:\ \widehat{\alpha}\ \dashv\ \Delta}$ [green]+<:InstantiateR+
+>| $\text{subtype} :: A \rightarrow B \rightarrow \Gamma \rightarrow \Delta$
 |===
 
-== Algorithmic Typing Rules
 
+.Instantiation Rules
 |===
-^| latexmath:[\frac{}{\Gamma[\alpha\]\ \vdash\ \alpha\ <:\ \alpha\ \dashv\ \Gamma[\alpha\]}] [green]+<:Var+
-  latexmath:[\quad\quad]
-  latexmath:[\frac{}{\Gamma\ \vdash\ 1\ <:\ 1\ \dashv\ \Gamma}] [green]+<:Unit+
-  latexmath:[\quad\quad]
-  latexmath:[\frac{}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ <:\ \widehat{\alpha}\ \dashv\ \Gamma[\widehat{\alpha}\]}] [green]+<:Exvar+
-  +
-  +
-  latexmath:[\frac{\Gamma\ \vdash\ B_1\ <:\ A_1\ \dashv\ \Theta \quad \Theta\ \vdash\ [\Theta\]A_2\ <:\ [\Theta\]B_2\ \dashv\ \Delta}{\Gamma\ \vdash\ A_1 \rightarrow A_2\ <:\ B_1 \rightarrow B_2\ \dashv\ \Delta}] [green]+<:→+
-  +
-  +
-  latexmath:[\frac{A_1\ <:\ B_1 \quad A_2\ <:\ B_2}{\Gamma\ \vdash\ A_1\ A_2\ <:\ B_1\ B_2 \dashv\ \Delta}] [blue]+<:App+
-  +
-  +
-  latexmath:[\frac{\Gamma,\blacktriangleright \widehat{\alpha},\widehat{\alpha}\ \vdash\ [\widehat{\alpha}/\alpha\]A\ <:\ B \dashv \Delta,\blacktriangleright \widehat{\alpha}, \Theta}{\Gamma\ \vdash\ \forall \alpha . A\ <:\ B\ \dashv\ \Delta}] [green]+<:∀L+
-  latexmath:[\quad\quad]
-  latexmath:[\frac{\Gamma,\alpha\ \vdash\ A<:B\ \dashv\ \Delta,\alpha,\Theta}{\Gamma\ \vdash\ A <: \forall \alpha . B\ \dashv\ \Delta}] [green]+<:∀R+
-  +
-  +
-  latexmath:[\frac{\widehat{\alpha} \notin FV(A) \quad \Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ :\leqq\ A\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ <:\ A\ \dashv\ \Delta}] [green]+<:InstantiateL+
-  latexmath:[\quad\quad]
-  latexmath:[\frac{\widehat{\alpha} \notin FV(A) \quad \Gamma[\widehat{\alpha}\]\ \vdash\ A\ :\leqq\ \widehat{\alpha}\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ A\ <:\ \widehat{\alpha}\ \dashv\ \Delta}] [green]+<:InstantiateR+
->| latexmath:[\text{subtype} :: A \rightarrow B \rightarrow \Gamma \rightarrow \Delta]
-<| Subtyping rules
+^| $\frac{\Gamma \vdash \tau}{\Gamma,\widehat{\alpha},\Gamma'\ \vdash\ \widehat{\alpha}\ :\leqq\ \tau\ \dashv\ \Gamma,\widehat{\alpha}=\tau,\Gamma'}$ [green]+InstLSolve+
+   $\quad\quad$
+   $\frac{}{\Gamma[\widehat{\alpha}\][\widehat{\beta}\] \dashv\ \widehat{\alpha} :\leqq \widehat{\beta}\ \vdash\ \Gamma[\widehat{\alpha}\][\widehat{\beta}=\widehat{\alpha}\]}$ [green]+InstLReach+
+   +
+   +
+   $\frac{\Gamma[\widehat{\alpha}_2,\widehat{\alpha}_1,\widehat{\alpha}=\widehat{\alpha}_2\rightarrow\widehat{\alpha}_1\]\ \vdash\ A_1 :\leqq \widehat{\alpha}_1\ \dashv\ \Theta \quad \Theta\ \vdash\ \widehat{\alpha}_2 :\leqq [\Theta\]A_2\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ :\leqq\ A_1 \rightarrow A_2\ \dashv\ \Delta}$ [green]+InstLArr+
+   $\quad\quad$
+   $\frac{\Gamma[\widehat{\alpha}\],\beta\ \vdash\ \widehat{\alpha}\ :\leqq\ B\ \dashv\ \Delta,\beta,\Delta'}{\Gamma[\widehat{\alpha}\ \vdash\ \widehat{\alpha}\ :\leqq\ \forall \beta . B\ \dashv\ \Delta}$ [green]+InstLAllR+
+^| $\frac{\Gamma \vdash \tau}{\Gamma,\widehat{\alpha},\Gamma'\ \vdash\ \tau\ :\leqq\ \widehat{\alpha}\ \dashv\ \Gamma,\widehat{\alpha}=\tau,\Gamma'}$ [green]+InstRSolve+
+   $\quad\quad$
+   $\frac{}{\Gamma[\widehat{\alpha}\][\widehat{\beta}\] \dashv\ \widehat{\beta} :\leqq \widehat{\alpha}\ \vdash\ \Gamma[\widehat{\alpha}\][\widehat{\beta}=\widehat{\alpha}\]}$ [green]+InstRReach+
+   +
+   +
+   $\frac{\Gamma[\widehat{\alpha}_2,\widehat{\alpha}_1,\widehat{\alpha}=\widehat{\alpha}_2\rightarrow\widehat{\alpha}_1\]\ \vdash\ \widehat{\alpha}_1 :\leqq A_1 \ \dashv\ \Theta \quad \Theta\ \vdash\ [\Theta\]A_2 :\leqq \widehat{\alpha}_2\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ A_1 \rightarrow A_2\ :\leqq\ \widehat{\alpha} \ \dashv\ \Delta}$ [green]+InstRArr+
+   $\quad\quad$
+   $\frac{\Gamma[\widehat{\alpha}\],\blacktriangleright \widehat{\beta},\widehat{\beta}\ \vdash [\widehat{\beta}/\beta\]B\ :\leqq\ \widehat{\alpha}\ \dashv\ \Delta,\blacktriangleright \widehat{\beta},\Delta'}{\Gamma[\widehat{\alpha}\ \vdash\ \forall \beta . B\ :\leqq\ \widehat{\alpha}\ \dashv\ \Delta}$ [green]+InstRAllL+
+>| $\text{instantiate}\ ::\ A \rightarrow B \rightarrow \Gamma \rightarrow \Delta$
 |===
 
+=== Typechecking rules -- bidirectional or tridirectional?
+
+.infer
 |===
-^| latexmath:[\frac{\Gamma \vdash \tau}{\Gamma,\widehat{\alpha},\Gamma'\ \vdash\ \widehat{\alpha}\ :\leqq\ \tau\ \dashv\ \Gamma,\widehat{\alpha}=\tau,\Gamma'}] [green]+InstLSolve+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{}{\Gamma[\widehat{\alpha}\][\widehat{\beta}\] \dashv\ \widehat{\alpha} :\leqq \widehat{\beta}\ \vdash\ \Gamma[\widehat{\alpha}\][\widehat{\beta}=\widehat{\alpha}\]}] [green]+InstLReach+
+^| $\frac{}{\Gamma\ \vdash\ \text{number} \Rightarrow \text{Num}\ \dashv\ \Gamma}$ [blue]+Num⇒+
+   $\quad\quad$
+   $\frac{}{\Gamma\ \vdash\ \text{int} \Rightarrow \text{Int}\ \dashv\ \Gamma}$ [blue]+Int⇒+
+   $\quad\quad$
+   $\frac{}{\Gamma\ \vdash\ \text{string} \Rightarrow \text{Str}\ \dashv\ \Gamma}$ [blue]+Str⇒+
+   $\quad\quad$
+   $\frac{}{\Gamma\ \vdash\ \text{bool} \Rightarrow \text{Bool}\ \dashv\ \Gamma}$ [blue]+Bool⇒+
    +
    +
-   latexmath:[\frac{\Gamma[\widehat{\alpha}_2,\widehat{\alpha}_1,\widehat{\alpha}=\widehat{\alpha}_2\rightarrow\widehat{\alpha}_1\]\ \vdash\ A_1 :\leqq \widehat{\alpha}_1\ \dashv\ \Theta \quad \Theta\ \vdash\ \widehat{\alpha}_2 :\leqq [\Theta\]A_2\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ :\leqq\ A_1 \rightarrow A_2\ \dashv\ \Delta}] [green]+InstLArr+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{\Gamma[\widehat{\alpha}\],\beta\ \vdash\ \widehat{\alpha}\ :\leqq\ B\ \dashv\ \Delta,\beta,\Delta'}{\Gamma[\widehat{\alpha}\ \vdash\ \widehat{\alpha}\ :\leqq\ \forall \beta . B\ \dashv\ \Delta}] [green]+InstLAllR+
-^| latexmath:[\frac{\Gamma \vdash \tau}{\Gamma,\widehat{\alpha},\Gamma'\ \vdash\ \tau\ :\leqq\ \widehat{\alpha}\ \dashv\ \Gamma,\widehat{\alpha}=\tau,\Gamma'}] [green]+InstRSolve+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{}{\Gamma[\widehat{\alpha}\][\widehat{\beta}\] \dashv\ \widehat{\beta} :\leqq \widehat{\alpha}\ \vdash\ \Gamma[\widehat{\alpha}\][\widehat{\beta}=\widehat{\alpha}\]}] [green]+InstRReach+
+   $\frac{v \notin \text{FV}(\Gamma) \quad \Gamma\ \vdash\ e_1\ \Rightarrow\ A\ \dashv\ \Gamma,\Theta \quad \Gamma\ \vdash\ \text{Gen}(A)=A' \quad \Gamma,v:A'\ \dashv\ e_2\ \Rightarrow\ B\ \dashv\ \Delta}{\Gamma\ \vdash\ v=e_1\ ;\ e_2\ \dashv\ \Delta}$ [blue]+Statement+
+   $\quad\quad$
+   $\frac{\Gamma, x:A\ \vdash\ e_2 \Rightarrow A\ \dashv\ \Delta}{\Gamma\ \vdash\ x\ ::\ A\ ;\ e_2\ \dashv\ \Delta}$ [blue]+Signature+
    +
    +
-   latexmath:[\frac{\Gamma[\widehat{\alpha}_2,\widehat{\alpha}_1,\widehat{\alpha}=\widehat{\alpha}_2\rightarrow\widehat{\alpha}_1\]\ \vdash\ \widehat{\alpha}_1 :\leqq A_1 \ \dashv\ \Theta \quad \Theta\ \vdash\ [\Theta\]A_2 :\leqq \widehat{\alpha}_2\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ A_1 \rightarrow A_2\ :\leqq\ \widehat{\alpha} \ \dashv\ \Delta}] [green]+InstRArr+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{\Gamma[\widehat{\alpha}\],\blacktriangleright \widehat{\beta},\widehat{\beta}\ \vdash [\widehat{\beta}/\beta\]B\ :\leqq\ \widehat{\alpha}\ \dashv\ \Delta,\blacktriangleright \widehat{\beta},\Delta'}{\Gamma[\widehat{\alpha}\ \vdash\ \forall \beta . B\ :\leqq\ \widehat{\alpha}\ \dashv\ \Delta}] [green]+InstRAllL+
->| latexmath:[\text{instantiate}\ ::\ A \rightarrow B \rightarrow \Gamma \rightarrow \Delta]
-<| Instantiation rules
+   $\frac{\Gamma\ \vdash\ x\Rightarrow A\ \dashv\ \Gamma' \quad \Gamma\ \vdash\ y\Rightarrow A'\ \dashv\ \Gamma' \quad \Gamma\ \dashv\ A\ <:\ B\ \vdash\ \Delta}{\Gamma\ \vdash\ [x,y\ \|\ \forall\ (x,y)\ \in\ \vec{xs}\] \dashv\ \Delta}$ [blue]+List+
+   +
+   +
+   $\frac{}{\Gamma\ \vdash\ () \Rightarrow 1\ \dashv\ \Gamma }$ [green]+1l⇒+
+   $\quad\quad$
+   $\frac{(x:A) \in \Gamma}{\Gamma\ \vdash\ x\ \Rightarrow A\ \dashv\ \Gamma}$ [green]+Var+
+   $\quad\quad$
+   +
+   +
+   $\frac{\Gamma,\widehat{\alpha},\widehat{\beta},x:\widehat{\alpha}\ \vdash\ e \Leftarrow \widehat{\beta}\ \dashv\ \Delta, x:\widehat{\alpha}, \Theta}{\Gamma\ \vdash\ \lambda x.e\ \Rightarrow\ \widehat{\alpha}\rightarrow \widehat{\beta}\ \dashv\ \Delta}$ [green]+→I⇒+
+   $\quad\quad$
+   $\frac{\Gamma\ \vdash\ e_1\ \Rightarrow\ A\ \dashv \Theta \quad\quad \Theta \vdash [\Theta\]A \bullet e_2 \Rightarrow\Rightarrow C \dashv \Delta}{\Gamma\ \vdash\ e_1 e_2 \Rightarrow C\ \dashv\ \Delta}$ [green]+→E+
+   $\quad\quad$
+   $\frac{\Gamma\ \vdash\ A \quad\quad \Gamma\ \vdash\ e \Leftarrow A\ \dashv\ \Delta}{\Gamma\ \vdash\ (e:A)\ \Rightarrow\ A\ \dashv\ \Delta}$ [green]+Anno+
+>| $\text{infer} :: \Gamma \rightarrow e \rightarrow (\Delta, A)$
 |===
 
+.check
 |===
-^| latexmath:[\frac{}{\Gamma\ \vdash\ \text{number} \Rightarrow \text{Num}\ \dashv\ \Gamma}] [blue]+Num⇒+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{}{\Gamma\ \vdash\ \text{int} \Rightarrow \text{Int}\ \dashv\ \Gamma}] [blue]+Int⇒+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{}{\Gamma\ \vdash\ \text{string} \Rightarrow \text{Str}\ \dashv\ \Gamma}] [blue]+Str⇒+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{}{\Gamma\ \vdash\ \text{bool} \Rightarrow \text{Bool}\ \dashv\ \Gamma}] [blue]+Bool⇒+
-   +
-   +
-   latexmath:[\frac{v \notin \text{FV}(\Gamma) \quad \Gamma\ \vdash\ e_1\ \Rightarrow\ A\ \dashv\ \Gamma,\Theta \quad \Gamma\ \vdash\ \text{Gen}(A)=A' \quad \Gamma,v:A'\ \dashv\ e_2\ \Rightarrow\ B\ \dashv\ \Delta}{\Gamma\ \vdash\ v=e_1\ ;\ e_2\ \dashv\ \Delta}] [blue]+Statement+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{\Gamma, x:A\ \vdash\ e_2 \Rightarrow A\ \dashv\ \Delta}{\Gamma\ \vdash\ x\ ::\ A\ ;\ e_2\ \dashv\ \Delta}] [blue]+Signature+
-   +
-   +
-   latexmath:[\frac{\Gamma\ \vdash\ x\Rightarrow A\ \dashv\ \Gamma' \quad \Gamma\ \vdash\ y\Rightarrow A'\ \dashv\ \Gamma' \quad \Gamma\ \dashv\ A\ <:\ B\ \vdash\ \Delta}{\Gamma\ \vdash\ [x,y\ \|\ \forall\ (x,y)\ \in\ \vec{xs}\] \dashv\ \Delta}] [blue]+List+
-   +
-   +
-   latexmath:[\frac{}{\Gamma\ \vdash\ () \Rightarrow 1\ \dashv\ \Gamma }] [green]+1l⇒+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{(x:A) \in \Gamma}{\Gamma\ \vdash\ x\ \Rightarrow A\ \dashv\ \Gamma}] [green]+Var+
-   latexmath:[\quad\quad]
-   +
-   +
-   latexmath:[\frac{\Gamma,\widehat{\alpha},\widehat{\beta},x:\widehat{\alpha}\ \vdash\ e \Leftarrow \widehat{\beta}\ \dashv\ \Delta, x:\widehat{\alpha}, \Theta}{\Gamma\ \vdash\ \lambda x.e\ \Rightarrow\ \widehat{\alpha}\rightarrow \widehat{\beta}\ \dashv\ \Delta}] [green]+→I⇒+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{\Gamma\ \vdash\ e_1\ \Rightarrow\ A\ \dashv \Theta \quad\quad \Theta \vdash [\Theta\]A \bullet e_2 \Rightarrow\Rightarrow C \dashv \Delta}{\Gamma\ \vdash\ e_1 e_2 \Rightarrow C\ \dashv\ \Delta}] [green]+→E+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{\Gamma\ \vdash\ A \quad\quad \Gamma\ \vdash\ e \Leftarrow A\ \dashv\ \Delta}{\Gamma\ \vdash\ (e:A)\ \Rightarrow\ A\ \dashv\ \Delta}] [green]+Anno+
->| latexmath:[\text{infer} :: \Gamma \rightarrow e \rightarrow (\Delta, A)]
+^| $\frac{}{\Gamma\ \vdash\ () \Leftarrow 1\ \dashv\ \Gamma}$ [green]+1I+
+   $\quad\quad$
+   $\frac{\Gamma,x:A\ \vdash\ e \Leftarrow B\ \dashv\ \Delta,x:A,\Theta}{\Gamma\ \vdash\ \lambda x.e \Leftarrow A \rightarrow B\ \dashv\ \Delta}$ [green]+→I+
+   $\quad\quad$
+   $\frac{\Gamma,\alpha\ \vdash\ e \Leftarrow A\ \dashv\ \Delta,\alpha,\Theta}{\Gamma\ \vdash\ e \Leftarrow \forall \alpha . A\ \dashv\ \Delta}$ [green]+∀I+
+   $\quad\quad$
+   $\frac{\Gamma\ \dashv\ e \Rightarrow A\ \vdash\ \Theta \quad\quad \Theta\ \vdash\ [\Theta\]A\ <:\ [\Theta\]B\ \dashv\ \Delta}{\Gamma\ \vdash\ e \Leftarrow B\ \dashv\ \Delta}$ [green]+Sub+
+   $\quad\quad$
+>| $\text{check} :: \Gamma \rightarrow e \rightarrow A \rightarrow (\Delta, B)$
+|===
 
-^| latexmath:[\frac{}{\Gamma\ \vdash\ () \Leftarrow 1\ \dashv\ \Gamma}] [green]+1I+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{\Gamma,x:A\ \vdash\ e \Leftarrow B\ \dashv\ \Delta,x:A,\Theta}{\Gamma\ \vdash\ \lambda x.e \Leftarrow A \rightarrow B\ \dashv\ \Delta}] [green]+→I+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{\Gamma,\alpha\ \vdash\ e \Leftarrow A\ \dashv\ \Delta,\alpha,\Theta}{\Gamma\ \vdash\ e \Leftarrow \forall \alpha . A\ \dashv\ \Delta}] [green]+∀I+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{\Gamma\ \dashv\ e \Rightarrow A\ \vdash\ \Theta \quad\quad \Theta\ \vdash\ [\Theta\]A\ <:\ [\Theta\]B\ \dashv\ \Delta}{\Gamma\ \vdash\ e \Leftarrow B\ \dashv\ \Delta}] [green]+Sub+
-   latexmath:[\quad\quad]
->| latexmath:[\text{check} :: \Gamma \rightarrow e \rightarrow A \rightarrow (\Delta, B)]
-^| latexmath:[\frac{\Gamma[\widehat{\alpha}_2,\widehat{\alpha}_1,\widehat{\alpha}=\widehat{\alpha}_1 \rightarrow \widehat{\alpha}_2\]\ \vdash\ e \Leftarrow\ \widehat{\alpha}_1\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ \bullet\ e \Rightarrow\Rightarrow \widehat{\alpha}_2\ \dashv\ \Delta}] [green]*latexmath:[\widehat{\alpha}]*[green]+App+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{\Gamma,\widehat{\alpha}\ \vdash\ [\widehat{\alpha}/\alpha\]A\ \bullet\ e \Rightarrow\Rightarrow C\ \dashv\ \Delta}{\Gamma\ \vdash\ \forall\alpha . A\ \bullet\ e \Rightarrow\Rightarrow C\ \dashv\ \Delta}] [green]+∀App+
-   latexmath:[\quad\quad]
-   latexmath:[\frac{\Gamma\ \vdash\ e \Leftarrow A\ \dashv\ \Delta}{\Gamma\ \vdash\ A \rightarrow C\ \bullet\ e \Rightarrow\Rightarrow C\ \dashv\ \Delta}]  [green]+→App+
-   latexmath:[\quad\quad]
->| latexmath:[\text{derive} :: \Gamma \rightarrow e \rightarrow A \rightarrow (\Delta, B)]
-<| Algorithmic typing rules
+.derive
+|===
+^| $\frac{\Gamma[\widehat{\alpha}_2,\widehat{\alpha}_1,\widehat{\alpha}=\widehat{\alpha}_1 \rightarrow \widehat{\alpha}_2\]\ \vdash\ e \Leftarrow\ \widehat{\alpha}_1\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ \bullet\ e \Rightarrow\Rightarrow \widehat{\alpha}_2\ \dashv\ \Delta}$ [green]*latexmath:[\widehat{\alpha}]*[green]+App+
+   $\quad\quad$
+   $\frac{\Gamma,\widehat{\alpha}\ \vdash\ [\widehat{\alpha}/\alpha\]A\ \bullet\ e \Rightarrow\Rightarrow C\ \dashv\ \Delta}{\Gamma\ \vdash\ \forall\alpha . A\ \bullet\ e \Rightarrow\Rightarrow C\ \dashv\ \Delta}$ [green]+∀App+
+   $\quad\quad$
+   $\frac{\Gamma\ \vdash\ e \Leftarrow A\ \dashv\ \Delta}{\Gamma\ \vdash\ A \rightarrow C\ \bullet\ e \Rightarrow\Rightarrow C\ \dashv\ \Delta}$  [green]+→App+
+   $\quad\quad$
+>| $\text{derive} :: \Gamma \rightarrow e \rightarrow A \rightarrow (\Delta, B)$
 |===
 
 [bibliography]
