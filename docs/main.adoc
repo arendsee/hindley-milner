@@ -9,10 +9,18 @@ The type system presented below is based on the one developed be Dunfield and
 Krishnaswami cite:[dunfield2013complete]. The sets of rules below, except where
 indicated, are taken directly from their paper.
 
+[env.texmacro]
+--
+\def\ea{\widehat{\alpha}}
+\def\eb{\widehat{\beta}}
+\newcommand{\mark}[1]{\blacktriangleright_{#1}}
+\newcommand{\expr}[3]{#1\ \vdash\ #2\ \dashv\ #3}
+--
+
 == Grammar
 
-terms:: $\quad\quad e\ :=\ ()\ |\ x\ |\ \lambda x .\ e\ |\ e e\ |\ e\ :\ A\ |\ x=e\ ;\ e\ |\ x\ ::\ A\ ; e$
-types:: $\quad\quad A,B,C\ :=\ 1\ |\ \alpha\ |\ A \rightarrow B\ |\ \forall \alpha. A\ |\ \alpha\ A$
+terms:: $e\ :=\ ()\ |\ x\ |\ \lambda x .\ e\ |\ e e\ |\ e\ :\ A\ |\ x=e\ ;\ e\ |\ x\ ::\ A\ ; e$
+types:: $A,B,C\ :=\ 1\ |\ \alpha\ |\ A \rightarrow B\ |\ \forall \alpha. A\ |\ \alpha\ A$
 
 == Algorithmic Rules
 
@@ -20,47 +28,47 @@ types:: $\quad\quad A,B,C\ :=\ 1\ |\ \alpha\ |\ A \rightarrow B\ |\ \forall \alp
 
 .Subtyping Rules
 |===
-^| $\frac{}{\Gamma[\alpha\]\ \vdash\ \alpha\ <:\ \alpha\ \dashv\ \Gamma[\alpha\]}$ [green]+<:Var+
+^| $\frac{}{\expr{\Gamma[\alpha\]}{\alpha\ <:\ \alpha}{\Gamma[\alpha\]}}$ [green]+<:Var+
   $\quad\quad$
-  $\frac{}{\Gamma\ \vdash\ 1\ <:\ 1\ \dashv\ \Gamma}$ [green]+<:Unit+
+  $\frac{}{\expr{\Gamma}{1\ <:\ 1}{\Gamma}}$ [green]+<:Unit+
   $\quad\quad$
-  $\frac{}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ <:\ \widehat{\alpha}\ \dashv\ \Gamma[\widehat{\alpha}\]}$ [green]+<:Exvar+
+  $\frac{}{\expr{\Gamma[\ea\]}{\ea\ <:\ \ea\}{\Gamma[\ea\]}}$ [green]+<:Exvar+
   +
   +
-  $\frac{\Gamma\ \vdash\ B_1\ <:\ A_1\ \dashv\ \Theta \quad \Theta\ \vdash\ [\Theta\]A_2\ <:\ [\Theta\]B_2\ \dashv\ \Delta}{\Gamma\ \vdash\ A_1 \rightarrow A_2\ <:\ B_1 \rightarrow B_2\ \dashv\ \Delta}$ [green]+<:→+
+  $\frac{\expr{\Gamma}{B_1\ <:\ A_1}{\Theta} \quad \expr{\Theta}{[\Theta\]A_2\ <:\ [\Theta\]B_2}{\Delta}}{\expr{\Gamma}{A_1 \rightarrow A_2\ <:\ B_1 \rightarrow B_2}{\Delta}}$ [green]+<:→+
   +
   +
-  $\frac{A_1\ <:\ B_1 \quad A_2\ <:\ B_2}{\Gamma\ \vdash\ A_1\ A_2\ <:\ B_1\ B_2 \dashv\ \Delta}$ [blue]+<:App+
+  $\frac{A_1\ <:\ B_1 \quad A_2\ <:\ B_2}{\expr{\Gamma}{A_1\ A_2\ <:\ B_1\ B_2}{\Delta}}$ [blue]+<:App+
   +
   +
-  $\frac{\Gamma,\blacktriangleright \widehat{\alpha},\widehat{\alpha}\ \vdash\ [\widehat{\alpha}/\alpha\]A\ <:\ B \dashv \Delta,\blacktriangleright \widehat{\alpha}, \Theta}{\Gamma\ \vdash\ \forall \alpha . A\ <:\ B\ \dashv\ \Delta}$ [green]+<:∀L+
+  $\frac{\expr{\Gamma,\mark{\ea},\ea}{[\ea/\alpha\]A\ <:\ B}{\Delta,\mark{\ea},\Theta}}{\expr{\Gamma}{\forall \alpha . A\ <:\ B}{\Delta}}$ [green]+<:∀L+
   $\quad\quad$
-  $\frac{\Gamma,\alpha\ \vdash\ A<:B\ \dashv\ \Delta,\alpha,\Theta}{\Gamma\ \vdash\ A <: \forall \alpha . B\ \dashv\ \Delta}$ [green]+<:∀R+
+  $\frac{\expr{\Gamma,\alpha}{A<:B}{\Delta,\alpha,\Theta}}{\expr{\Gamma}{A <: \forall \alpha . B}{\Delta}}$ [green]+<:∀R+
   +
   +
-  $\frac{\widehat{\alpha} \notin FV(A) \quad \Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ :\leqq\ A\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ <:\ A\ \dashv\ \Delta}$ [green]+<:InstantiateL+
+  $\frac{\ea \notin FV(A) \quad \expr{\Gamma[\ea\]}{\ea\ :\leqq\ A}{\Delta}}{\expr{\Gamma[\ea\]}{\ea\ <:\ A}{\Delta}}$ [green]+<:InstantiateL+
   $\quad\quad$
-  $\frac{\widehat{\alpha} \notin FV(A) \quad \Gamma[\widehat{\alpha}\]\ \vdash\ A\ :\leqq\ \widehat{\alpha}\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ A\ <:\ \widehat{\alpha}\ \dashv\ \Delta}$ [green]+<:InstantiateR+
+  $\frac{\ea \notin FV(A) \quad \expr{\Gamma[\ea\]}{A\ :\leqq\ \ea}{\Delta}}{\expr{\Gamma[\ea\]}{A\ <:\ \ea}{\Delta}}$ [green]+<:InstantiateR+
 >| $\text{subtype} :: A \rightarrow B \rightarrow \Gamma \rightarrow \Delta$
 |===
 
 
 .Instantiation Rules
 |===
-^| $\frac{\Gamma \vdash \tau}{\Gamma,\widehat{\alpha},\Gamma'\ \vdash\ \widehat{\alpha}\ :\leqq\ \tau\ \dashv\ \Gamma,\widehat{\alpha}=\tau,\Gamma'}$ [green]+InstLSolve+
+^| $\frac{\Gamma\ \vdash\ \tau}{\expr{\Gamma,\ea,\Gamma'}{\ea\ :\leqq\ \tau}{\Gamma,\ea=\tau,\Gamma'}}$ [green]+InstLSolve+
    $\quad\quad$
-   $\frac{}{\Gamma[\widehat{\alpha}\][\widehat{\beta}\] \dashv\ \widehat{\alpha} :\leqq \widehat{\beta}\ \vdash\ \Gamma[\widehat{\alpha}\][\widehat{\beta}=\widehat{\alpha}\]}$ [green]+InstLReach+
+   $\frac{}{\expr{\Gamma[\ea\][\eb\]}{\ea :\leqq \eb}{\Gamma[\ea\][\eb=\ea\]}}$ [green]+InstLReach+
    +
    +
-   $\frac{\Gamma[\widehat{\alpha}_2,\widehat{\alpha}_1,\widehat{\alpha}=\widehat{\alpha}_2\rightarrow\widehat{\alpha}_1\]\ \vdash\ A_1 :\leqq \widehat{\alpha}_1\ \dashv\ \Theta \quad \Theta\ \vdash\ \widehat{\alpha}_2 :\leqq [\Theta\]A_2\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ :\leqq\ A_1 \rightarrow A_2\ \dashv\ \Delta}$ [green]+InstLArr+
+   $\frac{\expr{\Gamma[\ea_2,\ea_1,\ea=\ea_2\rightarrow\ea_1\]}{A_1 :\leqq \ea_1}{\Theta} \quad \expr{\Theta}{\ea_2 :\leqq [\Theta\]A_2}{\Delta}}{\expr{\Gamma[\ea\]}{\ea\ :\leqq\ A_1 \rightarrow A_2}{\Delta}}$ [green]+InstLArr+
    $\quad\quad$
-   $\frac{\Gamma[\widehat{\alpha}\],\beta\ \vdash\ \widehat{\alpha}\ :\leqq\ B\ \dashv\ \Delta,\beta,\Delta'}{\Gamma[\widehat{\alpha}\ \vdash\ \widehat{\alpha}\ :\leqq\ \forall \beta . B\ \dashv\ \Delta}$ [green]+InstLAllR+
-^| $\frac{\Gamma \vdash \tau}{\Gamma,\widehat{\alpha},\Gamma'\ \vdash\ \tau\ :\leqq\ \widehat{\alpha}\ \dashv\ \Gamma,\widehat{\alpha}=\tau,\Gamma'}$ [green]+InstRSolve+
+   $\frac{\expr{\Gamma[\ea\],\beta}{\ea\ :\leqq\ B}{\Delta,\beta,\Delta'}}{\expr{\Gamma[\ea}{\ea\ :\leqq\ \forall \beta . B}{\Delta}}$ [green]+InstLAllR+
+^| $\frac{\Gamma\ \vdash\ \tau}{\expr{\Gamma,\ea,\Gamma'}{\tau\ :\leqq\ \ea}{\Gamma,\ea=\tau,\Gamma'}}$ [green]+InstRSolve+
    $\quad\quad$
-   $\frac{}{\Gamma[\widehat{\alpha}\][\widehat{\beta}\] \dashv\ \widehat{\beta} :\leqq \widehat{\alpha}\ \vdash\ \Gamma[\widehat{\alpha}\][\widehat{\beta}=\widehat{\alpha}\]}$ [green]+InstRReach+
+   $\frac{}{\expr{\Gamma[\ea\][\eb\]}{\eb :\leqq \ea}{\Gamma[\ea\][\eb=\ea\]}}$ [green]+InstRReach+
    +
    +
-   $\frac{\Gamma[\widehat{\alpha}_2,\widehat{\alpha}_1,\widehat{\alpha}=\widehat{\alpha}_2\rightarrow\widehat{\alpha}_1\]\ \vdash\ \widehat{\alpha}_1 :\leqq A_1 \ \dashv\ \Theta \quad \Theta\ \vdash\ [\Theta\]A_2 :\leqq \widehat{\alpha}_2\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ A_1 \rightarrow A_2\ :\leqq\ \widehat{\alpha} \ \dashv\ \Delta}$ [green]+InstRArr+
+   $\frac{\expr{\Gamma[\ea_2,\ea_1,\ea=\ea_2\rightarrow\ea_1\]}{\ea_1 :\leqq A_1}{\Theta}  \quad  \expr{\Theta}{[\Theta\]A_2 :\leqq \ea_2}{\Delta}}{\expr{\Gamma[\ea\]}{A_1 \rightarrow A_2\ :\leqq\ \ea}{\Delta}}$ [green]+InstRArr+
    $\quad\quad$
    $\frac{\Gamma[\widehat{\alpha}\],\blacktriangleright \widehat{\beta},\widehat{\beta}\ \vdash [\widehat{\beta}/\beta\]B\ :\leqq\ \widehat{\alpha}\ \dashv\ \Delta,\blacktriangleright \widehat{\beta},\Delta'}{\Gamma[\widehat{\alpha}\ \vdash\ \forall \beta . B\ :\leqq\ \widehat{\alpha}\ \dashv\ \Delta}$ [green]+InstRAllL+
 >| $\text{instantiate}\ ::\ A \rightarrow B \rightarrow \Gamma \rightarrow \Delta$
@@ -70,57 +78,57 @@ types:: $\quad\quad A,B,C\ :=\ 1\ |\ \alpha\ |\ A \rightarrow B\ |\ \forall \alp
 
 .infer
 |===
-^| $\frac{}{\Gamma\ \vdash\ \text{number} \Rightarrow \text{Num}\ \dashv\ \Gamma}$ [blue]+Num⇒+
+^| $\frac{}{\expr{\Gamma}{\text{number} \Rightarrow \text{Num}}{\Gamma}}$ [blue]+Num⇒+
    $\quad\quad$
-   $\frac{}{\Gamma\ \vdash\ \text{int} \Rightarrow \text{Int}\ \dashv\ \Gamma}$ [blue]+Int⇒+
+   $\frac{}{\expr{\Gamma}{\text{int} \Rightarrow \text{Int}}{\Gamma}}$ [blue]+Int⇒+
    $\quad\quad$
-   $\frac{}{\Gamma\ \vdash\ \text{string} \Rightarrow \text{Str}\ \dashv\ \Gamma}$ [blue]+Str⇒+
+   $\frac{}{\expr{\Gamma}{\text{string} \Rightarrow \text{Str}}{\Gamma}}$ [blue]+Str⇒+
    $\quad\quad$
-   $\frac{}{\Gamma\ \vdash\ \text{bool} \Rightarrow \text{Bool}\ \dashv\ \Gamma}$ [blue]+Bool⇒+
+   $\frac{}{\expr{\Gamma}{\text{bool} \Rightarrow \text{Bool}}{\Gamma}}$ [blue]+Bool⇒+
    +
    +
-   $\frac{v \notin \text{FV}(\Gamma) \quad \Gamma\ \vdash\ e_1\ \Rightarrow\ A\ \dashv\ \Gamma,\Theta \quad \Gamma\ \vdash\ \text{Gen}(A)=A' \quad \Gamma,v:A'\ \dashv\ e_2\ \Rightarrow\ B\ \dashv\ \Delta}{\Gamma\ \vdash\ v=e_1\ ;\ e_2\ \dashv\ \Delta}$ [blue]+Statement+
+   $\frac{v \notin \text{FV}(\Gamma) \quad \expr{\Gamma}{e_1\ \Rightarrow\ A}{\Gamma,\Theta} \quad \Gamma\ \dashv\ \text{Gen}(A)=A' \quad \expr{\Gamma,v:A'}{e_2\ \Rightarrow\ B}{\Delta}}{\expr{\Gamma}{v=e_1\ ;\ e_2}{\Delta}}$ [blue]+Statement+
    $\quad\quad$
-   $\frac{\Gamma, x:A\ \vdash\ e_2 \Rightarrow A\ \dashv\ \Delta}{\Gamma\ \vdash\ x\ ::\ A\ ;\ e_2\ \dashv\ \Delta}$ [blue]+Signature+
+   $\frac{\expr{\Gamma, x:A}{e_2 \Rightarrow A}{\Delta}}{\expr{\Gamma}{x\ ::\ A\ ;\ e_2}{\Delta}}$ [blue]+Signature+
    +
    +
-   $\frac{\Gamma\ \vdash\ x\Rightarrow A\ \dashv\ \Gamma' \quad \Gamma\ \vdash\ y\Rightarrow A'\ \dashv\ \Gamma' \quad \Gamma\ \dashv\ A\ <:\ B\ \vdash\ \Delta}{\Gamma\ \vdash\ [x,y\ \|\ \forall\ (x,y)\ \in\ \vec{xs}\] \dashv\ \Delta}$ [blue]+List+
+   $\frac{\expr{\Gamma}{x\Rightarrow A}{\Gamma'} \quad \expr{\Gamma}{y\Rightarrow A'}{\Gamma'} \quad \expr{\Gamma}{A\ <:\ B}{\Delta}}{\expr{\Gamma}{[x,y\ \|\ \forall\ (x,y)\ \in\ \vec{xs}\]}{\Delta}}$ [blue]+List+
    +
    +
-   $\frac{}{\Gamma\ \vdash\ () \Rightarrow 1\ \dashv\ \Gamma }$ [green]+1l⇒+
+   $\frac{}{\expr{\Gamma}{() \Rightarrow 1}{\Gamma}}$ [green]+1l⇒+
    $\quad\quad$
-   $\frac{(x:A) \in \Gamma}{\Gamma\ \vdash\ x\ \Rightarrow A\ \dashv\ \Gamma}$ [green]+Var+
+   $\frac{(x:A) \in \Gamma}{\expr{\Gamma}{x\ \Rightarrow A}{\Gamma}}$ [green]+Var+
    $\quad\quad$
    +
    +
-   $\frac{\Gamma,\widehat{\alpha},\widehat{\beta},x:\widehat{\alpha}\ \vdash\ e \Leftarrow \widehat{\beta}\ \dashv\ \Delta, x:\widehat{\alpha}, \Theta}{\Gamma\ \vdash\ \lambda x.e\ \Rightarrow\ \widehat{\alpha}\rightarrow \widehat{\beta}\ \dashv\ \Delta}$ [green]+→I⇒+
+   $\frac{\expr{\Gamma,\ea,\eb,x:\ea}{e \Leftarrow \eb}{\Delta, x:\ea, \Theta}}{\expr{\Gamma}{\lambda x.e\ \Rightarrow\ \ea\rightarrow \eb}{\Delta}}$ [green]+→I⇒+
    $\quad\quad$
-   $\frac{\Gamma\ \vdash\ e_1\ \Rightarrow\ A\ \dashv \Theta \quad\quad \Theta \vdash [\Theta\]A \bullet e_2 \Rightarrow\Rightarrow C \dashv \Delta}{\Gamma\ \vdash\ e_1 e_2 \Rightarrow C\ \dashv\ \Delta}$ [green]+→E+
+   $\frac{\expr{\Gamma}{e_1\ \Rightarrow\ A}{\Theta} \quad\quad \expr{\Theta}{[\Theta\]A \bullet e_2 \Rightarrow\Rightarrow C}{\Delta}}{\expr{\Gamma}{e_1 e_2 \Rightarrow C}{\Delta}}$ [green]+→E+
    $\quad\quad$
-   $\frac{\Gamma\ \vdash\ A \quad\quad \Gamma\ \vdash\ e \Leftarrow A\ \dashv\ \Delta}{\Gamma\ \vdash\ (e:A)\ \Rightarrow\ A\ \dashv\ \Delta}$ [green]+Anno+
+   $\frac{\Gamma\ \vdash\ A \quad\quad \expr{\Gamma}{e \Leftarrow A}{\Delta}}{\expr{\Gamma}{(e:A)\ \Rightarrow\ A}{\Delta}}$ [green]+Anno+
 >| $\text{infer} :: \Gamma \rightarrow e \rightarrow (\Delta, A)$
 |===
 
 .check
 |===
-^| $\frac{}{\Gamma\ \vdash\ () \Leftarrow 1\ \dashv\ \Gamma}$ [green]+1I+
+^| $\frac{}{\expr{\Gamma}{() \Leftarrow 1}{\Gamma}}$ [green]+1I+
    $\quad\quad$
-   $\frac{\Gamma,x:A\ \vdash\ e \Leftarrow B\ \dashv\ \Delta,x:A,\Theta}{\Gamma\ \vdash\ \lambda x.e \Leftarrow A \rightarrow B\ \dashv\ \Delta}$ [green]+→I+
+   $\frac{\expr{\Gamma,x:A}{e \Leftarrow B}{\Delta,x:A,\Theta}}{\expr{\Gamma}{\lambda x.e \Leftarrow A \rightarrow B}{\Delta}}$ [green]+→I+
    $\quad\quad$
-   $\frac{\Gamma,\alpha\ \vdash\ e \Leftarrow A\ \dashv\ \Delta,\alpha,\Theta}{\Gamma\ \vdash\ e \Leftarrow \forall \alpha . A\ \dashv\ \Delta}$ [green]+∀I+
+   $\frac{\expr{\Gamma,\alpha}{e \Leftarrow A}{\Delta,\alpha,\Theta}}{\expr{\Gamma}{e \Leftarrow \forall \alpha . A}{\Delta}}$ [green]+∀I+
    $\quad\quad$
-   $\frac{\Gamma\ \dashv\ e \Rightarrow A\ \vdash\ \Theta \quad\quad \Theta\ \vdash\ [\Theta\]A\ <:\ [\Theta\]B\ \dashv\ \Delta}{\Gamma\ \vdash\ e \Leftarrow B\ \dashv\ \Delta}$ [green]+Sub+
+   $\frac{\expr{\Gamma}{e \Rightarrow A}{\Theta} \quad\quad \expr{\Theta}{[\Theta\]A\ <:\ [\Theta\]B}{\Delta}}{\expr{\Gamma}{e \Leftarrow B}{\Delta}}$ [green]+Sub+
    $\quad\quad$
 >| $\text{check} :: \Gamma \rightarrow e \rightarrow A \rightarrow (\Delta, B)$
 |===
 
 .derive
 |===
-^| $\frac{\Gamma[\widehat{\alpha}_2,\widehat{\alpha}_1,\widehat{\alpha}=\widehat{\alpha}_1 \rightarrow \widehat{\alpha}_2\]\ \vdash\ e \Leftarrow\ \widehat{\alpha}_1\ \dashv\ \Delta}{\Gamma[\widehat{\alpha}\]\ \vdash\ \widehat{\alpha}\ \bullet\ e \Rightarrow\Rightarrow \widehat{\alpha}_2\ \dashv\ \Delta}$ [green]*latexmath:[\widehat{\alpha}]*[green]+App+
+^| $\frac{\expr{\Gamma[\ea_2,\ea_1,\ea=\ea_1 \rightarrow \ea_2\]}{e \Leftarrow\ \ea_1}{\Delta}}{\expr{\Gamma[\ea\]}{\ea\ \bullet\ e \Rightarrow\Rightarrow \ea_2}{\Delta}}$ [green]*latexmath:[\ea]*[green]+App+
    $\quad\quad$
-   $\frac{\Gamma,\widehat{\alpha}\ \vdash\ [\widehat{\alpha}/\alpha\]A\ \bullet\ e \Rightarrow\Rightarrow C\ \dashv\ \Delta}{\Gamma\ \vdash\ \forall\alpha . A\ \bullet\ e \Rightarrow\Rightarrow C\ \dashv\ \Delta}$ [green]+∀App+
+   $\frac{\expr{\Gamma,\ea}{[\ea/\alpha\]A\ \bullet\ e \Rightarrow\Rightarrow C}{\Delta}}{\expr{\Gamma}{\forall\alpha . A\ \bullet\ e \Rightarrow\Rightarrow C}{\Delta}}$ [green]+∀App+
    $\quad\quad$
-   $\frac{\Gamma\ \vdash\ e \Leftarrow A\ \dashv\ \Delta}{\Gamma\ \vdash\ A \rightarrow C\ \bullet\ e \Rightarrow\Rightarrow C\ \dashv\ \Delta}$  [green]+→App+
+   $\frac{\expr{\Gamma}{e \Leftarrow A}{\Delta}}{\expr{\Gamma}{A \rightarrow C\ \bullet\ e \Rightarrow\Rightarrow C}{\Delta}}$  [green]+→App+
    $\quad\quad$
 >| $\text{derive} :: \Gamma \rightarrow e \rightarrow A \rightarrow (\Delta, B)$
 |===
