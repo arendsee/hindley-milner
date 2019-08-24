@@ -30,6 +30,14 @@ exprTestGood e t = testCase (unpack e) (do
       (Left err) -> error (show err)
   )
 
+exprTestFull :: Text -> Text -> TestTree
+exprTestFull code expCode = testCase (unpack code) (do
+    x <- runStack (typecheck (readExpr code)) 0
+    case x of
+      (Right e) -> assertEqual "" e (readExpr expCode) 
+      (Left err) -> error (show err)
+  )
+
 exprTestBad :: Text -> TestTree
 exprTestBad e = testCase ("Fails?: " <> unpack e) (do
     x <- runStack (typecheck (readExpr e)) 0
@@ -56,6 +64,11 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "True" bool
     , exprTestGood "4.2" num
     , exprTestGood "\"this is a string literal\"" str
+    , exprTestGood "42 :: Int" int
+    , exprTestGood "True :: Bool" bool
+    , exprTestGood "4.2 :: Num" num
+    , exprTestGood "\"this is a string literal\" :: Str" str
+    , exprTestGood "f :: Int -> Int; f (42 :: Int)" int
     , exprTestGood "(\\x -> True)" (forall ["a"] (fun [var "a", bool]))
     , exprTestGood "(\\x -> True) 42" bool
     , exprTestGood "(\\x -> (\\y -> True) x) 42" bool
@@ -82,7 +95,7 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "f :: [Int] -> Bool; f [1]" bool
     , exprTestGood "f :: forall a . [a] -> Bool; f [1]" bool
     , exprTestGood "map :: forall a b . (a->b) -> [a] -> [b]; f :: Int -> Bool; map f [5,2]" (lst bool)
-    -- -- failing tests
+    -- failing tests
     , exprTestBad "[1,2,True]"
     , exprTestBad "\\x -> y" -- unbound variable
   ]

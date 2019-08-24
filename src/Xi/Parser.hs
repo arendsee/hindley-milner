@@ -93,7 +93,7 @@ pUni = symbol "UNIT" >> return UniE
 
 pAnn :: Parser Expr
 pAnn = do
-  e <- parens pExpr <|> pVar <|> pListE
+  e <- parens pExpr <|> pVar <|> pListE <|> try pNumE <|> pIntE <|> pLogE <|> pStrE
   _ <- symbol "::"
   t <- pType
   return $ AnnE e t
@@ -104,7 +104,8 @@ pApp = do
   (e:es) <- many1 s
   return $ foldl AppE (AppE f e) es
   where
-    s =   parens pExpr
+    s =   try pAnn
+      <|> try (parens pExpr)
       <|> try pUni
       <|> try pStrE
       <|> try pLogE
