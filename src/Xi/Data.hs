@@ -146,6 +146,7 @@ data TypeError
   | ToplevelRedefinition
   | UnkindJackass
   | NoAnnotationFound
+  | OtherError T.Text
   deriving(Show, Ord, Eq)
 
 (+>) :: Indexable a => Gamma -> a -> Gamma
@@ -293,6 +294,7 @@ instance Pretty TypeError where
   pretty ToplevelRedefinition    = "ToplevelRedefinition"
   pretty UnkindJackass           = "UnkindJackass"
   pretty NoAnnotationFound       = "NoAnnotationFound"
+  pretty (OtherError t)          = pretty t
 
 instance Pretty Type where
   pretty UniT = "1"

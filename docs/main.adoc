@@ -6,25 +6,71 @@
 :bibtex-order: appearance
 
 The type system presented below is based on the one developed be Dunfield and
-Krishnaswami cite:[dunfield2013complete]. The sets of rules below, except where
+Krishnaswami cite:[dunfield2013complete] (DK). The sets of rules below, except where
 indicated, are taken directly from their paper.
 
 [env.texmacro]
 --
 \def\ea{\widehat{\alpha}}
 \def\eb{\widehat{\beta}}
+\def\sep{ \quad\quad}
 \newcommand{\mark}[1]{\blacktriangleright_{#1}}
 \newcommand{\expr}[3]{#1\ \vdash\ #2\ \dashv\ #3}
 --
 
 == Grammar
 
-terms:: $e\ :=\ ()\ |\ x\ |\ \lambda x .\ e\ |\ e e\ |\ e\ :\ A\ |\ x=e\ ;\ e\ |\ x\ ::\ A\ ; e$
-types:: $A,B,C\ :=\ 1\ |\ \alpha\ |\ A \rightarrow B\ |\ \forall \alpha. A\ |\ \alpha\ A$
+[env.equationalign]
+--
+\text{Terms} \sep e\ &:= ()    \sep & \text{nothing} \\
+   &|\ x                       \sep & \text{var} \\
+   &|\ \lambda x .\ e          \sep & \text{abstraction} \\
+   &|\ e e                     \sep & \text{application} \\
+   &|\ e\ ::\ A                \sep & \text{annotation} \\
+   &|\ x=e\ ;\ e               \sep & \text{declaration} \\
+   &|\ x\ ::\ A\ ; e           \sep & \text{signature} \\
+--
+
+[env.equationalign]
+--
+\text{Types} \sep A,B,C\ &:= 1    \sep & \text{unit} \\
+       &|\ \alpha                 \sep & \text{var} \\
+       &|\ A \rightarrow B        \sep & \text{function} \\
+       &|\ \forall \alpha. A      \sep & \text{universal quantification} \\
+       &|\ \alpha\ A              \sep & \text{parameterization}
+--
+
+The terms describe a typed lambda calculus. The declaration and signature
+expressions are additions that allow construction of larger programs. We depart
+from Hindley-Milner (HM) by excluding a +let+ term. In HM, expressions bound in
++let+ are generalized, allowing statements such as:
+
+----
+let f = (forall a . a -> a) in
+    x = (f 42, f "lettuce")
+----
+
+Where $f$ is generalized, allowing it to retain its polymorphism. The same is
+not true of variables bound in functions (in HM at least). For example, the
+following Haskell expression fails to typecheck:  
+
+----
+foo :: (a -> a) -> (Int, String)
+foo f = (f 42, f "lettuce")
+----
+
+We do not suport +let+ expressions or _let-polymorphism_, instead we generalize
+expressions only if they are bound at the top-level (i.e. in +declaration+
+terms). This follows the practice argued for in cite:[vytiniotis2010let].
 
 == Algorithmic Rules
 
 === Subtyping and instantiation
+
+The subtyping rules come directly from DK, except for the new rule for type
+application. This extension allows types to take an arbitrary number of type
+parameters. For example, the type of a hashmap from strings to integers might
+be written as +Map Str Int+. We also support +[a]+ as a shortcut for +List a+.
 
 .Subtyping Rules
 |===
@@ -32,7 +78,7 @@ types:: $A,B,C\ :=\ 1\ |\ \alpha\ |\ A \rightarrow B\ |\ \forall \alpha. A\ |\ \
   $\quad\quad$
   $\frac{}{\expr{\Gamma}{1\ <:\ 1}{\Gamma}}$ [green]+<:Unit+
   $\quad\quad$
-  $\frac{}{\expr{\Gamma[\ea\]}{\ea\ <:\ \ea\}{\Gamma[\ea\]}}$ [green]+<:Exvar+
+  $\frac{}{\expr{\Gamma[\ea\]}{\ea\ <:\ \ea}{\Gamma[\ea\]}}$ [green]+<:Exvar+
   +
   +
   $\frac{\expr{\Gamma}{B_1\ <:\ A_1}{\Theta} \quad \expr{\Theta}{[\Theta\]A_2\ <:\ [\Theta\]B_2}{\Delta}}{\expr{\Gamma}{A_1 \rightarrow A_2\ <:\ B_1 \rightarrow B_2}{\Delta}}$ [green]+<:→+
@@ -76,6 +122,14 @@ types:: $A,B,C\ :=\ 1\ |\ \alpha\ |\ A \rightarrow B\ |\ \forall \alpha. A\ |\ \
 
 === Typechecking rules -- bidirectional or tridirectional?
 
+We add new typechecking rules that add support for primitives, containers,
+declarations and signatures. The primitive rules are axioms where the types are
+inferred by the lexer. The only currently supported container is a homogenous
+list (e.g., +[Num]+ for a list of numbers). A declaration allows a variable to
+be assigned to an expression. Top-level shadowing is not allowed (i.e. no
+re-assignment). Also the types are generalized, with all remaining existential
+variables pulled out as universal quantifiers.
+
 .infer
 |===
 ^| $\frac{}{\expr{\Gamma}{\text{number} \Rightarrow \text{Num}}{\Gamma}}$ [blue]+Num⇒+
@@ -87,12 +141,12 @@ types:: $A,B,C\ :=\ 1\ |\ \alpha\ |\ A \rightarrow B\ |\ \forall \alpha. A\ |\ \
    $\frac{}{\expr{\Gamma}{\text{bool} \Rightarrow \text{Bool}}{\Gamma}}$ [blue]+Bool⇒+
    +
    +
-   $\frac{v \notin \text{FV}(\Gamma) \quad \expr{\Gamma}{e_1\ \Rightarrow\ A}{\Gamma,\Theta} \quad \Gamma\ \dashv\ \text{Gen}(A)=A' \quad \expr{\Gamma,v:A'}{e_2\ \Rightarrow\ B}{\Delta}}{\expr{\Gamma}{v=e_1\ ;\ e_2}{\Delta}}$ [blue]+Statement+
+   $\frac{x \notin \text{FV}(\Gamma) \quad \expr{\Gamma}{e_1\ \Rightarrow\ A}{\Gamma,\Theta} \quad \Gamma\ \dashv\ \text{Gen}(A)=A' \quad \expr{\Gamma,x:A'}{e_2\ \Rightarrow\ B}{\Delta}}{\expr{\Gamma}{x=e_1\ ;\ e_2}{\Delta}}$ [blue]+Declaration+
    $\quad\quad$
    $\frac{\expr{\Gamma, x:A}{e_2 \Rightarrow A}{\Delta}}{\expr{\Gamma}{x\ ::\ A\ ;\ e_2}{\Delta}}$ [blue]+Signature+
    +
    +
-   $\frac{\expr{\Gamma}{x\Rightarrow A}{\Gamma'} \quad \expr{\Gamma}{y\Rightarrow A'}{\Gamma'} \quad \expr{\Gamma}{A\ <:\ B}{\Delta}}{\expr{\Gamma}{[x,y\ \|\ \forall\ (x,y)\ \in\ \vec{xs}\]}{\Delta}}$ [blue]+List+
+   $\frac{\Gamma\ \vdash\ x\Rightarrow A \quad \Gamma\ \vdash\ y\Rightarrow A}{\expr{\Gamma}{[x,y\ \|\ \forall\ (x,y)\ \in\ \vec{xs}\]}{\Delta}}$ [blue]+List+
    +
    +
    $\frac{}{\expr{\Gamma}{() \Rightarrow 1}{\Gamma}}$ [green]+1l⇒+

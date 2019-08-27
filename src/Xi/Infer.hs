@@ -59,7 +59,7 @@ runCheck s g e t x
 
 runDerive :: Doc' -> Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr) -> Stack (Gamma, Type, Expr)
 runDerive s g e t x
-  = run ("derive " <> s) [("g", pretty g), ("e", pretty (show e)), ("t", pretty t)] x
+  = run ("synthesize " <> s) [("g", pretty g), ("e", pretty (show e)), ("t", pretty t)] x
 
 generalize :: Type -> Type
 generalize t = generalize' existentialMap t
@@ -333,6 +333,10 @@ instantiate ta@(ExistT v) tb g1 = runInstantiate "instLSolve" ta tb g1 $ do
 instantiate t1 t2 g = runInstantiate "error" t1 t2 g $ do
   return g
 
+applyConcrete :: Expr -> Expr -> Type -> Stack Expr
+applyConcrete (AnnE e1 _) e2@(AnnE _ a) c = return $ AnnE (AppE (AnnE e1 (FunT a c)) e2) c
+applyConcrete _ _ _ = throwError $ OtherError "Expected annotated types in applyConcrete"
+
 infer
   :: Gamma
   -> Expr -- ^ A subexpression from the original expression
@@ -403,7 +407,8 @@ infer g1 e@(LamE v e2) = runInfer "-->I=>" g1 e $ do
 infer g1 e@(AppE e1 e2) = runInfer "-->E" g1 e $ do
   (g2, a, e1') <- infer g1 e1
   (g3, c, e2') <- derive g2 e2 (apply g2 a)
-  return (g3, c, AnnE (AppE e1' e2') c)
+  e3 <- applyConcrete e1' e2' c
+  return (g3, c, e3)
 
 --  g1 |- A
 --  g1 |- e <= A -| g2

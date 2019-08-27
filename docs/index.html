@@ -553,7 +553,7 @@ $(document).on('page:load', ready2);
 <div class="sectionbody">
 <div class="paragraph">
 <p>The type system presented below is based on the one developed be Dunfield and
-Krishnaswami [<span class='xref'><a href=#dunfield2013complete>[dunfield2013complete]</a></span>]. The sets of rules below, except where
+Krishnaswami [<span class='xref'><a href=#dunfield2013complete>[dunfield2013complete]</a></span>] (DK). The sets of rules below, except where
 indicated, are taken directly from their paper.</p>
 </div>
 <div class="openblock texmacro">
@@ -562,6 +562,7 @@ indicated, are taken directly from their paper.</p>
 \(
 \def\ea{\widehat{\alpha}}
 \def\eb{\widehat{\beta}}
+\def\sep{ \quad\quad}
 \newcommand{\mark}[1]{\blacktriangleright_{#1}}
 \newcommand{\expr}[3]{#1\ \vdash\ #2\ \dashv\ #3}
 \)
@@ -573,17 +574,65 @@ indicated, are taken directly from their paper.</p>
 <div class="sect1">
 <h2 id="_grammar">Grammar</h2>
 <div class="sectionbody">
-<div class="dlist">
-<dl>
-<dt class="hdlist1">terms</dt>
-<dd>
-<p>\(e\ :=\ ()\ |\ x\ |\ \lambda x .\ e\ |\ e e\ |\ e\ :\ A\ |\ x=e\ ;\ e\ |\ x\ ::\ A\ ; e\)</p>
-</dd>
-<dt class="hdlist1">types</dt>
-<dd>
-<p>\(A,B,C\ :=\ 1\ |\ \alpha\ |\ A \rightarrow B\ |\ \forall \alpha. A\ |\ \alpha\ A\)</p>
-</dd>
-</dl>
+<div class="openblock equationalign">
+<div class="content">
+<table class="equation_table_style" ><tr class="equation_row_style">
+<td class="equation_content_style";>
+\[\begin{split}
+\text{Terms} \sep e\ &amp;:= ()    \sep &amp; \text{nothing} \\
+   &amp;|\ x                       \sep &amp; \text{var} \\
+   &amp;|\ \lambda x .\ e          \sep &amp; \text{abstraction} \\
+   &amp;|\ e e                     \sep &amp; \text{application} \\
+   &amp;|\ e\ ::\ A                \sep &amp; \text{annotation} \\
+   &amp;|\ x=e\ ;\ e               \sep &amp; \text{declaration} \\
+   &amp;|\ x\ ::\ A\ ; e           \sep &amp; \text{signature} \\
+\end{split}\]
+</td>
+</tr></table>
+</div>
+</div>
+<div class="openblock equationalign">
+<div class="content">
+<table class="equation_table_style" ><tr class="equation_row_style">
+<td class="equation_content_style";>
+\[\begin{split}
+\text{Types} \sep A,B,C\ &amp;:= 1    \sep &amp; \text{unit} \\
+       &amp;|\ \alpha                 \sep &amp; \text{var} \\
+       &amp;|\ A \rightarrow B        \sep &amp; \text{function} \\
+       &amp;|\ \forall \alpha. A      \sep &amp; \text{universal quantification} \\
+       &amp;|\ \alpha\ A              \sep &amp; \text{parameterization}
+\end{split}\]
+</td>
+</tr></table>
+</div>
+</div>
+<div class="paragraph">
+<p>The terms describe a typed lambda calculus. The declaration and signature
+expressions are additions that allow construction of larger programs. We depart
+from Hindley-Milner (HM) by excluding a let term. In HM, expressions bound in
+let are generalized, allowing statements such as:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>let f = (forall a . a -&gt; a) in
+    x = (f 42, f "lettuce")</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Where \(f\) is generalized, allowing it to retain its polymorphism. The same is
+not true of variables bound in functions (in HM at least). For example, the
+following Haskell expression fails to typecheck:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>foo :: (a -&gt; a) -&gt; (Int, String)
+foo f = (f 42, f "lettuce")</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We do not suport let expressions or <em>let-polymorphism</em>, instead we generalize
+expressions only if they are bound at the top-level (i.e. in declaration
+terms). This follows the practice argued for in [<span class='xref'><a href=#vytiniotis2010let>[vytiniotis2010let]</a></span>].</p>
 </div>
 </div>
 </div>
@@ -592,6 +641,12 @@ indicated, are taken directly from their paper.</p>
 <div class="sectionbody">
 <div class="sect2">
 <h3 id="_subtyping_and_instantiation">Subtyping and instantiation</h3>
+<div class="paragraph">
+<p>The subtyping rules come directly from DK, except for the new rule for type
+application. This extension allows types to take an arbitrary number of type
+parameters. For example, the type of a hashmap from strings to integers might
+be written as Map Str Int. We also support [a] as a shortcut for List a.</p>
+</div>
 <table class="tableblock frame-all grid-all stretch">
 <caption class="title">Table 1. Subtyping Rules</caption>
 <colgroup>
@@ -603,7 +658,7 @@ indicated, are taken directly from their paper.</p>
   \(\quad\quad\)
   \(\frac{}{\expr{\Gamma}{1\ <:\ 1}{\Gamma}}\) <span class="green">&lt;:Unit</span>
   \(\quad\quad\)
-  \(\frac{}{\expr{\Gamma[\ea]}{\ea\ <:\ \ea\}{\Gamma[\ea]}}\) <span class="green">&lt;:Exvar</span>
+  \(\frac{}{\expr{\Gamma[\ea]}{\ea\ <:\ \ea}{\Gamma[\ea]}}\) <span class="green">&lt;:Exvar</span>
  <br>
  <br>
   \(\frac{\expr{\Gamma}{B_1\ <:\ A_1}{\Theta} \quad \expr{\Theta}{[\Theta]A_2\ <:\ [\Theta]B_2}{\Delta}}{\expr{\Gamma}{A_1 \rightarrow A_2\ <:\ B_1 \rightarrow B_2}{\Delta}}\) <span class="green">&lt;:→</span>
@@ -660,6 +715,15 @@ indicated, are taken directly from their paper.</p>
 </div>
 <div class="sect2">
 <h3 id="_typechecking_rulesbidirectional_or_tridirectional">Typechecking rules&#8201;&#8212;&#8201;bidirectional or tridirectional?</h3>
+<div class="paragraph">
+<p>We add new typechecking rules that add support for primitives, containers,
+declarations and signatures. The primitive rules are axioms where the types are
+inferred by the lexer. The only currently supported container is a homogenous
+list (e.g., [Num] for a list of numbers). A declaration allows a variable to
+be assigned to an expression. Top-level shadowing is not allowed (i.e. no
+re-assignment). Also the types are generalized, with all remaining existential
+variables pulled out as universal quantifiers.</p>
+</div>
 <table class="tableblock frame-all grid-all stretch">
 <caption class="title">Table 3. infer</caption>
 <colgroup>
@@ -676,12 +740,12 @@ indicated, are taken directly from their paper.</p>
    \(\frac{}{\expr{\Gamma}{\text{bool} \Rightarrow \text{Bool}}{\Gamma}}\) <span class="blue">Bool⇒</span>
   <br>
   <br>
-   \(\frac{v \notin \text{FV}(\Gamma) \quad \expr{\Gamma}{e_1\ \Rightarrow\ A}{\Gamma,\Theta} \quad \Gamma\ \dashv\ \text{Gen}(A)=A' \quad \expr{\Gamma,v:A'}{e_2\ \Rightarrow\ B}{\Delta}}{\expr{\Gamma}{v=e_1\ ;\ e_2}{\Delta}}\) <span class="blue">Statement</span>
+   \(\frac{x \notin \text{FV}(\Gamma) \quad \expr{\Gamma}{e_1\ \Rightarrow\ A}{\Gamma,\Theta} \quad \Gamma\ \dashv\ \text{Gen}(A)=A' \quad \expr{\Gamma,x:A'}{e_2\ \Rightarrow\ B}{\Delta}}{\expr{\Gamma}{x=e_1\ ;\ e_2}{\Delta}}\) <span class="blue">Declaration</span>
    \(\quad\quad\)
    \(\frac{\expr{\Gamma, x:A}{e_2 \Rightarrow A}{\Delta}}{\expr{\Gamma}{x\ ::\ A\ ;\ e_2}{\Delta}}\) <span class="blue">Signature</span>
   <br>
   <br>
-   \(\frac{\expr{\Gamma}{x\Rightarrow A}{\Gamma'} \quad \expr{\Gamma}{y\Rightarrow A'}{\Gamma'} \quad \expr{\Gamma}{A\ <:\ B}{\Delta}}{\expr{\Gamma}{[x,y\ |\ \forall\ (x,y)\ \in\ \vec{xs}]}{\Delta}}\) <span class="blue">List</span>
+   \(\frac{\Gamma\ \vdash\ x\Rightarrow A \quad \Gamma\ \vdash\ y\Rightarrow A}{\expr{\Gamma}{[x,y\ |\ \forall\ (x,y)\ \in\ \vec{xs}]}{\Delta}}\) <span class="blue">List</span>
   <br>
   <br>
    \(\frac{}{\expr{\Gamma}{() \Rightarrow 1}{\Gamma}}\) <span class="green">1l⇒</span>
@@ -752,6 +816,9 @@ indicated, are taken directly from their paper.</p>
 <li>
 <p><a id="dunfield2013complete"></a>J. Dunfield &amp; N. R. Krishnaswami, Complete and easy bidirectional typechecking for higher-rank polymorphism. <em>ACM SIGPLAN Notices</em> (ACM, 2013), pp. 429–442.</p>
 </li>
+<li>
+<p><a id="vytiniotis2010let"></a>D. Vytiniotis, S. Peyton Jones, &amp; T. Schrijvers, Let should not be generalized. <em>Proceedings of the 5th ACM SIGPLAN workshop on Types in language design and implementation</em> (ACM, 2010), pp. 39–50.</p>
+</li>
 </ol>
 </div>
 </div>
@@ -759,7 +826,7 @@ indicated, are taken directly from their paper.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2019-08-23 08:44:39 -0500
+Last updated 2019-08-27 07:27:29 -0500
 </div>
 </div>
 <script type="text/x-mathjax-config">

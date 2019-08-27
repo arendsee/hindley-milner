@@ -98,4 +98,7 @@ unitTests = testGroup "Unit tests"
     -- failing tests
     , exprTestBad "[1,2,True]"
     , exprTestBad "\\x -> y" -- unbound variable
+    -- internal
+    , exprTestFull "f :: forall a . a -> Bool; f 42"
+                   "f :: forall a . a -> Bool; (((f :: Int -> Bool) (42 :: Int)) :: Bool)"
   ]
