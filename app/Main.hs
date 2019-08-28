@@ -2,11 +2,10 @@
 
 module Main where
 
-import System.Console.Docopt
-import Control.Monad (when)
-import qualified System.Environment as SE
 import Xi
-import Data.Text.Prettyprint.Doc (pretty)
+
+import System.Console.Docopt
+import qualified System.Environment as SE
 import Data.Text (pack)
 
 template :: Docopt

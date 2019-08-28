@@ -1,12 +1,9 @@
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Data.List
-import Data.Ord
 import Xi.Infer
 import Xi.Parser
 import Xi.Data
-import Data.Text.Prettyprint.Doc
 import Data.Text (unpack, Text)
 
 main = defaultMain tests
@@ -26,7 +23,7 @@ exprTestGood :: Text -> Type -> TestTree
 exprTestGood e t = testCase (unpack e) (do
     x <- runStack (typecheck (readExpr e)) 0
     case x of
-      (Right e) -> assertEqual "" t (typeof e)
+      (Right e') -> assertEqual "" t (typeof e')
       (Left err) -> error (show err)
   )
 
@@ -42,7 +39,7 @@ exprTestBad :: Text -> TestTree
 exprTestBad e = testCase ("Fails?: " <> unpack e) (do
     x <- runStack (typecheck (readExpr e)) 0
     case x of
-      (Right t') -> assertFailure . unpack $ "Expected '" <> e <> "' to fail"
+      (Right _) -> assertFailure . unpack $ "Expected '" <> e <> "' to fail"
       (Left _) -> return ()
   )
 
@@ -50,6 +47,7 @@ int = VarT (TV "Int")
 bool = VarT (TV "Bool")
 num = VarT (TV "Num")
 str = VarT (TV "Str")
+fun [] = error "Cannot infer type of empty list"
 fun [t] = t
 fun (t:ts) = FunT t (fun ts)
 forall [] t = t

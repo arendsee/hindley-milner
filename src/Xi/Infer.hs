@@ -8,7 +8,7 @@ import qualified Data.Text as T
 import qualified Data.Set as Set
 
 typecheck :: Expr -> Stack Expr
-typecheck e = fmap (generalizeE . (\(_, _, e) -> e)) (infer [] e)
+typecheck e = fmap (generalizeE . (\(_, _, e') -> e')) (infer [] e)
 
 run :: Pretty a => Doc' -> [(Doc', Doc')] -> Stack a -> Stack a
 run s args x = do
@@ -432,7 +432,7 @@ infer g e1@(ListE []) = do
   let t' = ArrT (TV "List") [t]
   return (g +> t, t', ann e1 t')
 infer g e1@(ListE (x:xs)) = do 
-  (g', t', e') <- infer g x
+  (g', t', _) <- infer g x
   mapM (\x' -> check g x' t') xs 
   let t'' = ArrT (TV "List") [t']
   return (g', t'', ann e1 t'')
@@ -471,7 +471,7 @@ check g r1@(LamE v e) r2@(FunT a b) = runCheck "-->I" g r1 r2 $ do
 -- ----------------------------------------- Forall.I
 --  g1 |- e <= Forall x.A -| g2
 check g1 e r2@(Forall x a) = runCheck "Forall.I" g1 e r2 $ do
-  (g', t', e') <- check (g1 +> VarG x) e a
+  (g', _, e') <- check (g1 +> VarG x) e a
   g2 <- cut (VarG x) g'
   let t'' = apply g2 r2
   return (g2, t'', ann e' t'')
@@ -498,7 +498,7 @@ derive
 -- ----------------------------------------- -->App
 --  g1 |- A->C o e =>> C -| g2
 derive g e t@(FunT a b) = runDerive "-->App" g e t $ do
-  (g', t', e') <- check g e a
+  (g', _, e') <- check g e a
   return (g', apply g' b, e')
 
 --  g1,Ea |- [Ea/a]A o e =>> C -| g2
@@ -514,7 +514,7 @@ derive g e t'@(ExistT v) = runDerive "EaApp" g e t' $ do
   a <- newvar
   b <- newvar
   let g' = g +> a +> b +> SolvedG v (FunT a b)
-  (g'', t', e') <- check g' e a
+  (g'', _, _) <- check g' e a
   return (g'', apply g'' b, applyE g'' e)
 
 derive g e t = runDerive "unexpected" g e t $ do
