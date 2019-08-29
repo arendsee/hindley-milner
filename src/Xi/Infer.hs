@@ -1,4 +1,10 @@
-module Xi.Infer ( typecheck ) where
+module Xi.Infer (
+    typecheck
+  , subtype
+  , generalize
+  , substitute
+  , apply
+) where
 
 import Xi.Data
 import Control.Monad.Trans (liftIO)

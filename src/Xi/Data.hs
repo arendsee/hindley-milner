@@ -38,10 +38,12 @@ import qualified Control.Monad.Except as ME
 import qualified Control.Monad.State as MS
 import qualified Control.Monad.Writer as MW
 import qualified Control.Monad.Reader as MR
+import qualified Control.Monad as CM
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.Terminal
 import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
+import qualified Test.QuickCheck as QC
 
 type Doc' = Doc AnsiStyle
 
@@ -334,3 +336,49 @@ instance Pretty GammaIndex where
   pretty (ExistG t) = "<" <> pretty t <> ">"
   pretty (SolvedG v t) = "<" <> pretty v <> "> = " <> pretty t
   pretty (MarkG t) = "#" <> pretty t
+
+
+instance QC.Arbitrary Type where
+  arbitrary = arbitraryType 3 []
+
+  shrink (UniT) = []
+  shrink (VarT _) = []
+  shrink (ExistT _) = []
+  shrink (Forall v t) = QC.shrink t
+  shrink (FunT t1 t2) = [FunT t1' t2' | (t1', t2') <- QC.shrink (t1, t2) ] ++ QC.shrink t2
+  shrink (ArrT v []) = [VarT v]
+  shrink (ArrT v [p]) = [ArrT v [p'] | p' <- QC.shrink p] ++ QC.shrink (ArrT v [])
+  shrink (ArrT v (p:ps)) = [ArrT v (p':ps') | p' <- QC.shrink p, (ArrT v ps') <- QC.shrink (ArrT v ps) ] ++ QC.shrink (ArrT v ps)
+
+arbitraryType :: Int -> [TVar] -> QC.Gen Type
+arbitraryType depth vs = QC.oneof [
+      arbitraryType' depth vs
+    , Forall <$> pure (newvar vs) <*> arbitraryType depth (newvar vs : vs)
+  ]
+  where
+    variables = [1..] >>= flip CM.replicateM ['a'..'z']
+    arrs = [("J", 1), ("K", 2), ("L", 3), ("M", 4)]
+    newvar vs' = TV (T.pack $ variables !! length vs')
+
+arbitraryType' :: Int -> [TVar] -> QC.Gen Type
+arbitraryType' 0 vs = atomicType vs
+arbitraryType' depth vs = QC.oneof [
+      atomicType vs 
+    , FunT <$> arbitraryType' (depth-1) vs <*> arbitraryType' (depth-1) vs
+    , QC.frequency [
+          (4, arbitraryArrT (depth-1) vs (TV "J") 1)
+        , (3, arbitraryArrT (depth-1) vs (TV "K") 2)
+        , (2, arbitraryArrT (depth-1) vs (TV "L") 3)
+        , (1, arbitraryArrT (depth-1) vs (TV "M") 4)
+        -- could do more, but I doubt there is much point
+      ]
+  ]
+
+atomicType :: [TVar] -> QC.Gen Type
+atomicType [] = QC.elements [VarT (TV "A"), VarT (TV "B"), VarT (TV "C")]
+atomicType vs = QC.oneof [
+      atomicType []
+    , QC.elements (map (\v -> VarT v) vs)
+  ]
+arbitraryArrT :: Int -> [TVar] -> TVar -> Int -> QC.Gen Type
+arbitraryArrT depth vs v arity = ArrT <$> pure v <*> CM.replicateM arity (arbitraryType' depth vs)

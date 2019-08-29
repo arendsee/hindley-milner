@@ -17,6 +17,7 @@ dependencies:
 - prettyprinter-ansi-terminal
 - text
 - megaparsec
+- QuickCheck
 
 default-extensions:
   - OverloadedStrings
@@ -62,6 +63,5 @@ tests:
       - xi
       - pretty-show
       - tasty
-      # - tasty-quickcheck
-      # - tasty-smallcheck
+      - tasty-quickcheck
       - tasty-hunit
