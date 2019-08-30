@@ -163,6 +163,6 @@ Properties given:
 
 propertyTests = testGroup "Property tests"
   [
-      QC.testProperty "Fermat's little theorem" $
-        \x -> ((x :: Integer)^7 - x) `mod` 7 == 0
+      QC.testProperty "@generalize@ cannot decrease type size" $
+        \t -> typeSize (generalize t) >= typeSize t
   ]

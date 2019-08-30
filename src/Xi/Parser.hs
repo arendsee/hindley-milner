@@ -1,4 +1,4 @@
-module Xi.Parser (readExpr) where
+module Xi.Parser (readExpr, readType) where
 
 import Xi.Data
 import Text.Megaparsec
@@ -36,6 +36,9 @@ parens p = lexeme $ between (symbol "(") (symbol ")") p
 brackets :: Parser a -> Parser a
 brackets p = lexeme $ between (symbol "[") (symbol "]") p
 
+angles :: Parser a -> Parser a
+angles p = lexeme $ between (symbol "<") (symbol ">") p
+
 name :: Parser T.Text
 name = lexeme $ do
   f <- C.letterChar
@@ -46,6 +49,11 @@ readExpr :: T.Text -> Expr
 readExpr s = case parse (pExpr <* eof) "" s of 
   Left err -> error (show err)
   Right expr -> expr
+
+readType :: T.Text -> Type
+readType s = case parse (pType <* eof) "" s of 
+  Left err -> error (show err)
+  Right t -> t 
 
 pExpr :: Parser Expr
 pExpr = try pStatement <|> pNonStatementExpr
@@ -152,12 +160,18 @@ pEVar = fmap EV name
 
 pType :: Parser Type
 pType
-  =   try pForAllT
+  =   pExistential
+  <|> try pForAllT
   <|> try pArrT
   <|> try pFunT
   <|> pListT
   <|> parens pType
   <|> pVarT
+
+pExistential :: Parser Type
+pExistential = do
+  v <- angles name
+  return (ExistT (TV v))
 
 pArrT :: Parser Type
 pArrT = do
