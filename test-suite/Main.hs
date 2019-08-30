@@ -1,12 +1,11 @@
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck as QC
-import Control.Monad (replicateM)
 
 import Xi.Infer
 import Xi.Parser
 import Xi.Data
-import Data.Text (pack, unpack, Text)
+import Data.Text (unpack, Text)
 
 main = defaultMain tests
 
@@ -22,28 +21,25 @@ typeof (AppE _ t) = typeof t
 typeof t = error ("No annotation found for: " <> show t)
 
 exprTestGood :: Text -> Type -> TestTree
-exprTestGood e t = testCase (unpack e) (do
-    x <- runStack (typecheck (readExpr e)) 0
-    case x of
-      (Right e') -> assertEqual "" t (typeof e')
-      (Left err) -> error (show err)
-  )
+exprTestGood e t
+  = testCase (unpack e)
+  $ case runStack (typecheck (readExpr e)) 0 of
+      (Right e', _) -> assertEqual "" t (typeof e')
+      (Left err, _) -> error (show err)
 
 exprTestFull :: Text -> Text -> TestTree
-exprTestFull code expCode = testCase (unpack code) (do
-    x <- runStack (typecheck (readExpr code)) 0
-    case x of
-      (Right e) -> assertEqual "" e (readExpr expCode) 
-      (Left err) -> error (show err)
-  )
+exprTestFull code expCode
+  = testCase (unpack code)
+  $ case runStack (typecheck (readExpr code)) 0 of
+      (Right e, _) -> assertEqual "" e (readExpr expCode) 
+      (Left err, _) -> error (show err)
 
 exprTestBad :: Text -> TestTree
-exprTestBad e = testCase ("Fails?: " <> unpack e) (do
-    x <- runStack (typecheck (readExpr e)) 0
-    case x of
-      (Right _) -> assertFailure . unpack $ "Expected '" <> e <> "' to fail"
-      (Left _) -> return ()
-  )
+exprTestBad e
+  = testCase ("Fails?: " <> unpack e)
+  $ case runStack (typecheck (readExpr e)) 0 of
+      (Right _, _) -> assertFailure . unpack $ "Expected '" <> e <> "' to fail"
+      (Left _, _) -> return ()
 
 int = VarT (TV "Int")
 bool = VarT (TV "Bool")

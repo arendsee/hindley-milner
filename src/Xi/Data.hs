@@ -25,9 +25,6 @@ module Xi.Data
   , incDepth
   , decDepth
   , newvar
-  -- * Pretty printing
-  , Doc'
-  , prettyExpr
   -- * Config handling
   , verbosity
 ) where
@@ -38,24 +35,26 @@ import qualified Control.Monad.Except as ME
 import qualified Control.Monad.State as MS
 import qualified Control.Monad.Writer as MW
 import qualified Control.Monad.Reader as MR
+import qualified Control.Monad.Identity as MI
 import qualified Control.Monad as CM
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc
-import Data.Text.Prettyprint.Doc.Render.Terminal
-import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
 import qualified Test.QuickCheck as QC
 
-type Doc' = Doc AnsiStyle
-
-type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s IO))) a
+type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s MI.Identity))) a
 type Stack a = GeneralStack StackConfig TypeError [T.Text] StackState a
 
 -- | currently I do nothing with the Reader and Writer monads, but I'm leaving
 -- them in for now since I will need them when I plug this all into Morloc.
-runStack :: Stack a -> Int -> IO (Either TypeError a)
-runStack e verbosity' = do
-  ((e', _), _) <- MS.runStateT(MW.runWriterT(ME.runExceptT(MR.runReaderT e (StackConfig verbosity')))) emptyState
-  return e'
+runStack :: Stack a -> Int -> (Either TypeError a, [T.Text])
+runStack e verbosity'
+  = fst
+  . MI.runIdentity
+  . flip MS.runStateT emptyState
+  . MW.runWriterT
+  . ME.runExceptT
+  . MR.runReaderT e
+  $ StackConfig verbosity'
+         
 
 type Gamma = [GammaIndex]
 newtype EVar = EV T.Text deriving(Show, Eq, Ord)
@@ -235,32 +234,6 @@ depth :: Stack Int
 depth = MS.gets stateDepth
 
 
-typeStyle = SetAnsiStyle {
-      ansiForeground  = Just (Vivid, Green) -- ^ Set the foreground color, or keep the old one.
-    , ansiBackground  = Nothing             -- ^ Set the background color, or keep the old one.
-    , ansiBold        = Nothing             -- ^ Switch on boldness, or don’t do anything.
-    , ansiItalics     = Nothing             -- ^ Switch on italics, or don’t do anything.
-    , ansiUnderlining = Just Underlined     -- ^ Switch on underlining, or don’t do anything.
-  } 
-
-prettyType :: Pretty a => a -> Doc AnsiStyle 
-prettyType x = annotate typeStyle (pretty x)
-
-prettyExpr :: Expr -> Doc AnsiStyle
-prettyExpr UniE = "()"
-prettyExpr (VarE (EV s)) = pretty s
-prettyExpr (LamE (EV n) e) = "\\" <> pretty n <+> "->" <+> prettyExpr e
-prettyExpr (AnnE e t) = parens (prettyExpr e <+> "::" <+> prettyType t)
-prettyExpr (AppE e1@(LamE _ _) e2) = parens (prettyExpr e1) <+> prettyExpr e2
-prettyExpr (AppE e1 e2) = prettyExpr e1 <+> prettyExpr e2
-prettyExpr (IntE x) = pretty x
-prettyExpr (NumE x) = pretty x
-prettyExpr (StrE x) = dquotes (pretty x)
-prettyExpr (LogE x) = pretty x
-prettyExpr (Declaration v e1 e2) = pretty v <+> "=" <+> prettyExpr e1 <> line <> prettyExpr e2
-prettyExpr (Signature v t e2) = pretty v <+> "::" <+> prettyType t <> line <> prettyExpr e2
-prettyExpr (ListE xs) = list (map prettyExpr xs)
-
 class Indexable a where
   index :: a -> GammaIndex
 
@@ -274,69 +247,6 @@ instance Indexable Type where
 instance Indexable Expr where
   index (AnnE x t) = AnnG x t
   index _ = error "Can only index AnnE"
-
-instance Pretty EVar where
-  pretty (EV n) = pretty n
-
-instance Pretty TVar where
-  pretty (TV n) = pretty n
-
-instance Pretty TypeError where
-  pretty UnknownError            = "UnknownError: ???"
-  pretty (SubtypeError t1 t2)    = "SubtypeError:" <+> pretty t1 <+> "<:" <+> pretty t2
-  pretty ExistentialError        = "ExistentialError: probably a bug"
-  pretty BadExistentialCast      = "BadExistentialCast"
-  pretty AccessError             = "Bad access attempt"
-  pretty NonFunctionDerive       = "Derive should only be called on function applications"
-  pretty (UnboundVariable v)     = "Unbound variable:" <+> pretty v
-  pretty OccursCheckFail         = "OccursCheckFail"
-  pretty EmptyCut                = "EmptyCut - probably a logic bug"
-  pretty TypeMismatch            = "TypeMismatch"
-  pretty (UnexpectedPattern e t) = "UnexpectedPattern: " <> pretty e <> "|" <> pretty t
-  pretty ToplevelRedefinition    = "ToplevelRedefinition"
-  pretty UnkindJackass           = "UnkindJackass"
-  pretty NoAnnotationFound       = "NoAnnotationFound"
-  pretty (OtherError t)          = pretty t
-
-instance Pretty Type where
-  pretty UniT = "1"
-  pretty (VarT (TV s)) = pretty s
-  pretty (FunT t1@(FunT _ _) t2) = parens (pretty t1) <+> "->" <+> pretty t2
-  pretty (FunT t1 t2) = pretty t1 <+> "->" <+> pretty t2
-  pretty t@(Forall _ _) = "forall" <+> hsep (forallVars t) <+> "." <+> forallBlock t
-  pretty (ExistT e) = "<" <> pretty e <> ">"
-  pretty (ArrT v ts) = pretty v <+> hsep (map pretty ts)
-
-forallVars :: Type -> [Doc a]
-forallVars (Forall s t) = pretty s : forallVars t
-forallVars _ = []
-
-forallBlock :: Type -> Doc a
-forallBlock (Forall _ t) = forallBlock t
-forallBlock t = pretty t
-
-instance Pretty Expr where
-  pretty UniE = "()"
-  pretty (VarE (EV s)) = pretty s
-  pretty (LamE (EV n) e) = "\\" <> pretty n <+> "->" <+> pretty e
-  pretty (AnnE e t) = parens (pretty e <+> ":" <+> pretty t)
-  pretty (AppE e1@(LamE _ _) e2) = parens (pretty e1) <+> pretty e2
-  pretty (AppE e1 e2) = pretty e1 <+> pretty e2
-  pretty (IntE x) = pretty x
-  pretty (NumE x) = pretty x
-  pretty (StrE x) = dquotes (pretty x)
-  pretty (LogE x) = pretty x
-  pretty (Declaration v e1 e2) = pretty v <+> "=" <+> pretty e1 <> line <> pretty e2
-  pretty (Signature v t e2) = pretty v <+> "::" <+> pretty t <> line <> pretty e2
-  pretty (ListE xs) = list (map pretty xs)
-
-instance Pretty GammaIndex where 
-  pretty (VarG t) = pretty t
-  pretty (AnnG e t) = pretty (AnnE e t)
-  pretty (ExistG t) = "<" <> pretty t <> ">"
-  pretty (SolvedG v t) = "<" <> pretty v <> "> = " <> pretty t
-  pretty (MarkG t) = "#" <> pretty t
-
 
 instance QC.Arbitrary Type where
   arbitrary = arbitraryType 3 []
