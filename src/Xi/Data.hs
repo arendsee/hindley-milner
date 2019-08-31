@@ -296,8 +296,8 @@ instance QC.Arbitrary GammaIndex where
   shrink = undefined
 
 instance QC.Arbitrary TVar where
-  arbitrary = undefined
-  shrink = undefined
+  arbitrary = QC.elements [TV "a", TV "b", TV "c"]
+  shrink _ = []
 
 instance QC.Arbitrary EVar where
   arbitrary = undefined

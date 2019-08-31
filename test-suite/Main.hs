@@ -157,8 +157,20 @@ Properties given:
     - #2 == annotationOf #3
 -}
 
+
+-- subtypeOf :: Type -> Type -> Gamma -> Bool
+-- subtypeOf t1 t2 g = case subtype t1 t2 g of
+--   (Right _, _) -> True
+--   (Left _, _) -> False
+
 propertyTests = testGroup "Property tests"
   [
-      QC.testProperty "@generalize@ cannot decrease type size" $
-        \t -> typeSize (generalize t) >= typeSize t
+     QC.testProperty "size(Gen(t)) >= size(t)" $
+       \t -> typeSize (generalize t) >= typeSize t
+   -- , QC.testProperty "Gen(t) <: t" $
+   --     \t -> subtypeOf (generalize t) t []
+   , QC.testProperty "size([v/<v>]t) == size(t)" $
+       \(v,t) -> typeSize (substitute v t) == typeSize t
+   , QC.testProperty "Gen(t) == Gen([v/<v>]t)" $
+       \(v,t) -> generalize t == generalize (substitute v t)
   ]
