@@ -125,13 +125,6 @@ data Type
   -- ^ f [Type]
   deriving(Show, Ord, Eq)
 
-data Monotype
-  = UniM
-  | VarM TVar
-  | ExistM TVar
-  | FunM Monotype Monotype
-  deriving(Show, Ord, Eq)
-
 data TypeError
   = UnknownError
   | SubtypeError Type Type
@@ -275,6 +268,7 @@ arbitraryType' 0 vs = atomicType vs
 arbitraryType' depth vs = QC.oneof [
       atomicType vs 
     , FunT <$> arbitraryType' (depth-1) vs <*> arbitraryType' (depth-1) vs
+    , QC.elements [ExistT (TV "e1"), ExistT (TV "e2"), ExistT (TV "e3")]
     , QC.frequency [
           (4, arbitraryArrT (depth-1) vs (TV "J") 1)
         , (3, arbitraryArrT (depth-1) vs (TV "K") 2)
@@ -292,3 +286,19 @@ atomicType vs = QC.oneof [
   ]
 arbitraryArrT :: Int -> [TVar] -> TVar -> Int -> QC.Gen Type
 arbitraryArrT depth vs v arity = ArrT <$> pure v <*> CM.replicateM arity (arbitraryType' depth vs)
+
+instance QC.Arbitrary Expr where
+  arbitrary = undefined
+  shrink = undefined
+
+instance QC.Arbitrary GammaIndex where
+  arbitrary = undefined
+  shrink = undefined
+
+instance QC.Arbitrary TVar where
+  arbitrary = undefined
+  shrink = undefined
+
+instance QC.Arbitrary EVar where
+  arbitrary = undefined
+  shrink = undefined
