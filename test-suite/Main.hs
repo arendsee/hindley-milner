@@ -131,26 +131,12 @@ Properties given:
    - unannotate(i2) == unannotate(i4.3)
   derive :: Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr)
     - d2 must be a function
-  generalize :: Type -> Type
-    - g2 <: g1
   generalizeE :: Expr -> Expr
     - unannotate(g1) == unannotate(g2)
   apply :: Gamma -> Type -> Type
     - size #2 <= size #3
   applyE :: Gamma -> Expr -> Expr
     - unannotate #2 == unannotate #3
-  subtype :: Type -> Type -> Gamma -> Stack Gamma
-    - subtype t1 t2 && subtype t2 t3 && subtype t1 t3
-  substitute :: TVar -> Type -> Type
-    - generalize(substitute v t) == generalize t
-    - typesize(t) <= typesize(substitute(t))
-  access1 :: Indexable a => a -> Gamma -> Maybe (Gamma, GammaIndex, Gamma)
-    - ( length(#2) == length(#3.1) + 1 + length(#3.3) ) || #3 == Nothing
-  access2 :: a -> a -> Gamma -> Maybe (Gamma, GammaIndex, Gamma, GammaIndex, Gamma)
-    - ...
-  ann :: Expr -> Type -> Expr
-    - #1 == unannotate #3
-    - #2 == annotationOf #3
 -}
 
 subtypeOf :: Type -> Type -> Gamma -> Bool
@@ -170,6 +156,4 @@ propertyTests = testGroup "Property tests"
    -- subtype tests
    , QC.testProperty "t <: t" $
        \t -> subtypeOf t t []
-   -- , QC.testProperty "Gen(t) <: t" $
-   --     \t -> subtypeOf t (generalize t) []
   ]

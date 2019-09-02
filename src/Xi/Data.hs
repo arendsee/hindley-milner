@@ -18,6 +18,9 @@ module Xi.Data
   , throwError
   , runStack
   , index
+  --
+  , generalize
+  , generalizeE
   -- * State manipulation
   , newvar
   -- * Config handling
@@ -34,6 +37,7 @@ import qualified Control.Monad.Identity as MI
 import qualified Control.Monad as CM
 import qualified Data.Text as T
 import qualified Test.QuickCheck as QC
+import qualified Data.Set as Set
 
 type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s MI.Identity))) a
 type Stack a = GeneralStack StackConfig TypeError [T.Text] StackState a
@@ -185,6 +189,49 @@ ann e@(Declaration _ _ _) _ = e
 ann e@(Signature _ _ _) _ = e
 ann e t = AnnE e t
 
+generalize :: Type -> Type
+generalize t = generalize' existentialMap t where 
+  generalize' :: [(TVar, TVar)] -> Type -> Type
+  generalize' [] t' = t'
+  generalize' ((e,r):xs) t' = generalize' xs (generalizeOne e r t')
+
+  existentialMap
+    = zip
+      (Set.toList (findExistentials t))
+      (map (TV . T.pack) variables)
+
+  variables = [1..] >>= flip CM.replicateM ['a'..'z']
+
+  findExistentials :: Type -> Set.Set TVar
+  findExistentials UniT = Set.empty
+  findExistentials (VarT _) = Set.empty
+  findExistentials (ExistT v) = Set.singleton v
+  findExistentials (Forall v t') = Set.delete v (findExistentials t')
+  findExistentials (FunT t1 t2) = Set.union (findExistentials t1) (findExistentials t2)
+  findExistentials (ArrT _ ts) = Set.unions (map findExistentials ts)
+
+  generalizeOne :: TVar -> TVar -> Type -> Type
+  generalizeOne v0 r t0 = Forall r (f v0 t0) where
+    f :: TVar -> Type -> Type
+    f v t1@(ExistT v')
+      | v == v' = VarT r
+      | otherwise = t1
+    f v (FunT t1 t2) = FunT (f v t1) (f v t2)
+    f v t1@(Forall x t2)
+      | v /= x = Forall x (f v t2)
+      | otherwise = t1
+    f v (ArrT v' xs) = ArrT v' (map (f v) xs)
+    f _ t1 = t1
+
+generalizeE :: Expr -> Expr
+generalizeE (ListE xs) = ListE (map generalizeE xs)
+generalizeE (LamE v e) = LamE v (generalizeE e)
+generalizeE (AppE e1 e2) = AppE (generalizeE e1) (generalizeE e2)
+generalizeE (AnnE e t) = ann (generalizeE e) (generalize t)
+generalizeE (Declaration v e1 e2) = Declaration v (generalizeE e1) (generalizeE e2)
+generalizeE (Signature v t e) = Signature v (generalize t) (generalizeE e)
+generalizeE e = e
+
 newvar :: Stack Type
 newvar = do
   s <- MS.get 
@@ -280,8 +327,55 @@ arbitraryArrT :: Int -> [TVar] -> TVar -> Int -> QC.Gen Type
 arbitraryArrT depth vs v arity = ArrT <$> pure v <*> CM.replicateM arity (arbitraryType' depth vs)
 
 instance QC.Arbitrary Expr where
-  arbitrary = undefined
-  shrink = undefined
+  arbitrary = arbitraryExpr 3 3 [] []
+  shrink _ = []
+
+arbitraryExpr :: Int -> Int -> [(EVar, Expr)] -> [(EVar, Type)] -> QC.Gen Expr
+arbitraryExpr t n es ss = QC.oneof [
+      arbitraryDeclaration t n es ss
+    , arbitrarySignature   t n es ss
+    , arbitraryFinalExpression n es ss []
+  ]
+
+evars = (map (\i -> (EV . T.pack) ('x':show i)) [0..])
+
+arbitraryDeclaration :: Int -> Int -> [(EVar, Expr)] -> [(EVar, Type)] -> QC.Gen Expr
+arbitraryDeclaration t n es ss = do
+  -- This generator cannot generate a signature for a declared variable.
+  -- This is of course a spectacular limitation, but I adding type annotations
+  -- to a generated expression seems a bit hard.
+  let v = evars !! (length es + length ss)
+  e <- arbitraryFinalExpression n es ss []
+  r <- arbitraryExpr (t-1) n ((v,e):es) ss
+  return $ Declaration v e r
+
+arbitrarySignature :: Int -> Int -> [(EVar, Expr)] -> [(EVar, Type)] -> QC.Gen Expr
+arbitrarySignature t n es ss = do
+  let v = evars !! (length es + length ss)
+  e <- arbitraryType n []
+  r <- arbitraryExpr (t-1) n es ((v,e):ss)
+  return $ Signature v e r
+
+arbitraryFinalExpression :: Int -> [(EVar, Expr)] -> [(EVar, Type)] -> [EVar] -> QC.Gen Expr
+arbitraryFinalExpression t es ss ls = QC.frequency [
+      (length(vars), QC.elements vars)
+    , (1+t, fmap (\p -> ListE [p] ) arbitraryPrimitive)
+    , (1+t, arbitraryPrimitive)
+    , (4*t,
+        let i = length es + length ss + length ls
+        in LamE <$> return (evars !! i) <*> arbitraryFinalExpression (t-1) es ss (evars !! i : ls)
+      )
+  ]
+  where
+    vars = [VarE v | v <- map fst es ++ map fst ss ++ ls]
+
+arbitraryPrimitive :: QC.Gen Expr
+arbitraryPrimitive = QC.oneof [
+      fmap IntE (QC.arbitrary :: QC.Gen Integer)
+    , fmap NumE (QC.arbitrary :: QC.Gen Double)
+    , fmap LogE (QC.arbitrary :: QC.Gen Bool)
+    , QC.elements [StrE "foo", StrE "bar"]
+  ]
 
 instance QC.Arbitrary GammaIndex where
   arbitrary = undefined

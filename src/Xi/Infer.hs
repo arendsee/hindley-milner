@@ -1,7 +1,6 @@
 module Xi.Infer (
     typecheck
   , subtype
-  , generalize
   , substitute
   , apply
 ) where
@@ -13,51 +12,6 @@ import qualified Data.Set as Set
 
 typecheck :: Expr -> Stack Expr
 typecheck e = fmap (generalizeE . (\(_, _, e') -> e')) (infer [] e)
-
-generalize :: Type -> Type
-generalize t = generalize' existentialMap t
-  where 
-
-    generalize' :: [(TVar, TVar)] -> Type -> Type
-    generalize' [] t' = t'
-    generalize' ((e,r):xs) t' = generalize' xs (generalizeOne e r t')
-
-    existentialMap
-      = zip
-        (Set.toList (findExistentials t))
-        (map (TV . T.pack) variables)
-
-    variables = [1..] >>= flip replicateM ['a'..'z']
-
-    findExistentials :: Type -> Set.Set TVar
-    findExistentials UniT = Set.empty
-    findExistentials (VarT _) = Set.empty
-    findExistentials (ExistT v) = Set.singleton v
-    findExistentials (Forall v t') = Set.delete v (findExistentials t')
-    findExistentials (FunT t1 t2) = Set.union (findExistentials t1) (findExistentials t2)
-    findExistentials (ArrT _ ts) = Set.unions (map findExistentials ts)
-
-    generalizeOne :: TVar -> TVar -> Type -> Type
-    generalizeOne v0 r t0 = Forall r (f v0 t0) where
-      f :: TVar -> Type -> Type
-      f v t1@(ExistT v')
-        | v == v' = VarT r
-        | otherwise = t1
-      f v (FunT t1 t2) = FunT (f v t1) (f v t2)
-      f v t1@(Forall x t2)
-        | v /= x = Forall x (f v t2)
-        | otherwise = t1
-      f v (ArrT v' xs) = ArrT v' (map (f v) xs)
-      f _ t1 = t1
-
-generalizeE :: Expr -> Expr
-generalizeE (ListE xs) = ListE (map generalizeE xs)
-generalizeE (LamE v e) = LamE v (generalizeE e)
-generalizeE (AppE e1 e2) = AppE (generalizeE e1) (generalizeE e2)
-generalizeE (AnnE e t) = ann (generalizeE e) (generalize t)
-generalizeE (Declaration v e1 e2) = Declaration v (generalizeE e1) (generalizeE e2)
-generalizeE (Signature v t e) = Signature v (generalize t) (generalizeE e)
-generalizeE e = e
 
 
 -- | substitute all appearances of a given variable with an existential
