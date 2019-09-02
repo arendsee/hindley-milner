@@ -93,6 +93,8 @@ data Expr
   -- ^ (x)
   | ListE [Expr]
   -- ^ [e]
+  | TupleE [Expr]
+  -- ^ (e1), (e1,e2), ... (e1,e2,...,en)
   | LamE EVar Expr
   -- ^ (\x -> e)
   | AppE Expr Expr

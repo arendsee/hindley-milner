@@ -346,7 +346,15 @@ infer g e1@(ListE (x:xs)) = do
   mapM (\x' -> check g x' t') xs 
   let t'' = ArrT (TV "List") [t']
   return (g', t'', ann e1 t'')
-
+infer g (TupleE []) = error "Illegal tuple (length must be greater than 1)"
+infer g (TupleE [x]) = error "Illegal tuple (length must be greater than 1)"
+infer g (TupleE xs) = do
+  let v = TV . T.pack $ "Tuple" ++ (show (length xs))
+  elements <- mapM (\x -> infer g x) xs
+  let ts = map (\(_,t,_) -> t) elements
+      es = map (\(_,_,e) -> e) elements
+      t = ArrT v ts
+  return (g, t, AnnE (TupleE es) t)
 
 -- | Pattern matches against each type
 check

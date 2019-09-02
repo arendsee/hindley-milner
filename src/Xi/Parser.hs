@@ -60,7 +60,8 @@ pExpr = try pStatement <|> pNonStatementExpr
 
 pNonStatementExpr :: Parser Expr
 pNonStatementExpr
-  =   try pUni
+  =   try pTuple
+  <|> try pUni
   <|> try pAnn
   <|> try pApp
   <|> try pStrE
@@ -74,6 +75,15 @@ pNonStatementExpr
 
 pListE :: Parser Expr
 pListE = fmap ListE $ brackets (sepBy pExpr (char ','))
+
+pTuple :: Parser Expr
+pTuple = do
+  _ <- symbol "("
+  e <- pNonStatementExpr
+  _ <- symbol ","
+  es <- sepBy1 pNonStatementExpr (char ',')
+  _ <- symbol ")"
+  return (TupleE (e:es))
 
 pStatement :: Parser Expr
 pStatement = try pDeclaration <|> pSignature

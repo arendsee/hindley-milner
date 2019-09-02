@@ -65,6 +65,7 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "True :: Bool" bool
     , exprTestGood "4.2 :: Num" num
     , exprTestGood "\"this is a string literal\" :: Str" str
+    , exprTestGood "(4.2, True)" (arr "Tuple2" [num, bool])
     , exprTestGood "f :: Int -> Int; f (42 :: Int)" int
     , exprTestGood "(\\x -> True)" (forall ["a"] (fun [var "a", bool]))
     , exprTestGood "(\\x -> True) 42" bool
