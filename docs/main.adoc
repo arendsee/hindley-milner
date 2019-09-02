@@ -29,6 +29,8 @@ indicated, are taken directly from their paper.
    &|\ e\ ::\ A                \sep & \text{annotation} \\
    &|\ x=e\ ;\ e               \sep & \text{declaration} \\
    &|\ x\ ::\ A\ ; e           \sep & \text{signature} \\
+   &|\ [e1, e2, ...]           \sep & \text{homogenous list} \\
+   &|\ (e1, e2, ...)           \sep & \text{tuple} \\
 --
 
 [env.equationalign]
@@ -147,6 +149,9 @@ variables pulled out as universal quantifiers.
    +
    +
    $\frac{\Gamma\ \vdash\ x\Rightarrow A \quad \Gamma\ \vdash\ y\Rightarrow A}{\expr{\Gamma}{[x,y\ \|\ \forall\ (x,y)\ \in\ \vec{xs}\]}{\Delta}}$ [blue]+List+
+   +
+   +
+   $\frac{\Gamma\ \vdash\ x\Rightarrow A \quad \Gamma\ \vdash\ y\Rightarrow A}{\expr{\Gamma}{[x,y\ \|\ \forall\ (x,y)\ \in\ \vec{xs}\]}{\Delta}}$ [blue]+Tuple+
    +
    +
    $\frac{}{\expr{\Gamma}{() \Rightarrow 1}{\Gamma}}$ [green]+1l⇒+

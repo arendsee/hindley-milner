@@ -586,6 +586,8 @@ indicated, are taken directly from their paper.</p>
    &amp;|\ e\ ::\ A                \sep &amp; \text{annotation} \\
    &amp;|\ x=e\ ;\ e               \sep &amp; \text{declaration} \\
    &amp;|\ x\ ::\ A\ ; e           \sep &amp; \text{signature} \\
+   &amp;|\ [e1, e2, &#8230;&#8203;]           \sep &amp; \text{homogenous list} \\
+   &amp;|\ (e1, e2, &#8230;&#8203;)           \sep &amp; \text{tuple} \\
 \end{split}\]
 </td>
 </tr></table>
@@ -748,6 +750,9 @@ variables pulled out as universal quantifiers.</p>
    \(\frac{\Gamma\ \vdash\ x\Rightarrow A \quad \Gamma\ \vdash\ y\Rightarrow A}{\expr{\Gamma}{[x,y\ |\ \forall\ (x,y)\ \in\ \vec{xs}]}{\Delta}}\) <span class="blue">List</span>
   <br>
   <br>
+   \(\frac{\Gamma\ \vdash\ x\Rightarrow A \quad \Gamma\ \vdash\ y\Rightarrow A}{\expr{\Gamma}{[x,y\ |\ \forall\ (x,y)\ \in\ \vec{xs}]}{\Delta}}\) <span class="blue">Tuple</span>
+  <br>
+  <br>
    \(\frac{}{\expr{\Gamma}{() \Rightarrow 1}{\Gamma}}\) <span class="green">1l⇒</span>
    \(\quad\quad\)
    \(\frac{(x:A) \in \Gamma}{\expr{\Gamma}{x\ \Rightarrow A}{\Gamma}}\) <span class="green">Var</span>
@@ -826,7 +831,7 @@ variables pulled out as universal quantifiers.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2019-08-27 07:27:29 -0500
+Last updated 2019-09-02 16:26:00 -0500
 </div>
 </div>
 <script type="text/x-mathjax-config">
