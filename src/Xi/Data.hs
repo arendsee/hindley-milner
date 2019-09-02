@@ -12,8 +12,6 @@ module Xi.Data
   , TypeError(..)
   , access1
   , access2
-  , accessWith
-  , accessWith2
   , ann
   , lookupT
   , lookupE
@@ -21,9 +19,6 @@ module Xi.Data
   , runStack
   , index
   -- * State manipulation
-  , depth
-  , incDepth
-  , decDepth
   , newvar
   -- * Config handling
   , verbosity
@@ -62,9 +57,8 @@ newtype TVar = TV T.Text deriving(Show, Eq, Ord)
 
 data StackState = StackState {
       stateVar :: Int
-    , stateDepth :: Int
   } deriving(Ord, Eq, Show)
-emptyState = StackState 0 0
+emptyState = StackState 0
 
 data StackConfig = StackConfig {
       configVerbosity :: Int 
@@ -130,7 +124,7 @@ data TypeError
   | SubtypeError Type Type
   | ExistentialError
   | BadExistentialCast
-  | AccessError
+  | AccessError T.Text
   | NonFunctionDerive
   | UnboundVariable EVar
   | OccursCheckFail
@@ -185,19 +179,6 @@ access2 lgi rgi gs
       _ -> Nothing
     _ -> Nothing
 
-accessWith :: (Indexable a) => (GammaIndex -> GammaIndex) -> a -> Gamma -> Stack Gamma
-accessWith f gi gs = case access1 gi gs of
-  (Just (ls, x, rs)) -> return $ ls <> (f x:rs)
-  Nothing -> throwError AccessError
-
-accessWith2
-  :: (Indexable a)
-  => (GammaIndex -> GammaIndex) -> (GammaIndex -> GammaIndex)
-  -> a -> a -> Gamma -> Stack Gamma
-accessWith2 f g lgi rgi gs = case access2 lgi rgi gs of
-  (Just (ls, x, ms, y, rs)) -> return $ ls <> (f x:ms) <> (g y:rs)
-  Nothing -> throwError AccessError
-
 ann :: Expr -> Type -> Expr
 ann (AnnE e _) t = AnnE e t 
 ann e@(Declaration _ _ _) _ = e
@@ -212,20 +193,6 @@ newvar = do
   return (ExistT $ TV v)
   where
     newvars = zipWith (\x y -> T.pack (x ++ show y)) (repeat "t") ([0..] :: [Integer])
-
-incDepth :: Stack ()
-incDepth = do
-  s <- MS.get
-  MS.put $ s {stateDepth = stateDepth s + 1 } 
-
-decDepth :: Stack ()
-decDepth = do
-  s <- MS.get
-  MS.put $ s {stateDepth = stateDepth s - 1 } 
-
-depth :: Stack Int
-depth = MS.gets stateDepth
-
 
 class Indexable a where
   index :: a -> GammaIndex
@@ -244,24 +211,51 @@ instance Indexable Expr where
 instance QC.Arbitrary Type where
   arbitrary = arbitraryType 3 []
 
-  shrink (UniT) = []
-  shrink (VarT _) = []
-  shrink (ExistT _) = []
-  shrink (Forall v t) = QC.shrink t
-  shrink (FunT t1 t2) = [FunT t1' t2' | (t1', t2') <- QC.shrink (t1, t2) ] ++ QC.shrink t2
-  shrink (ArrT v []) = [VarT v]
-  shrink (ArrT v [p]) = [ArrT v [p'] | p' <- QC.shrink p] ++ QC.shrink (ArrT v [])
-  shrink (ArrT v (p:ps)) = [ArrT v (p':ps') | p' <- QC.shrink p, (ArrT v ps') <- QC.shrink (ArrT v ps) ] ++ QC.shrink (ArrT v ps)
+  shrink (UniT) = [VarT (TV "X")]
+  shrink (VarT (TV "X")) = []
+  shrink (VarT _) = [VarT (TV "X")]
+  shrink (ExistT _) = [VarT (TV "X")]
+  shrink (Forall v t) = QC.shrink t ++ [t] ++ [Forall v t' | t' <- QC.shrink t]
+  shrink (FunT t1 t2)
+    =  QC.shrink t1
+    ++ QC.shrink t2
+    ++ [t1,t2]
+    ++ [FunT t1' t2' | (t1', t2') <- QC.shrink (t1, t2) ]
+    ++ [FunT t1' t2  | t1' <- QC.shrink t1 ]
+    ++ [FunT t1  t2' | t2' <- QC.shrink t2 ]
+  shrink (ArrT _ []) = [] -- this expression should not be generated
+  shrink (ArrT v@(TV "L") [p1,p2,p3])
+    = [VarT (TV "X")]
+    ++ QC.shrink p1
+    ++ QC.shrink p2
+    ++ QC.shrink p3
+    ++ QC.shrink (ArrT (TV "K") [p1,p2])
+    ++ QC.shrink (ArrT (TV "K") [p1,p3])
+    ++ QC.shrink (ArrT (TV "K") [p2,p3])
+    ++ [ArrT v [p1',p2',p3'] | (p1',p2',p3') <- QC.shrink (p1,p2,p3)]
+  shrink (ArrT v@(TV "K") [p1,p2])
+    = [VarT (TV "X")]
+    ++ QC.shrink p1
+    ++ QC.shrink p2
+    ++ QC.shrink (ArrT (TV "J") [p1])
+    ++ QC.shrink (ArrT (TV "J") [p2])
+    ++ [ArrT v [p1',p2'] | (p1',p2') <- QC.shrink (p1,p2)]
+  shrink (ArrT (TV "J") [p])
+    = [VarT (TV "X")]
+    ++ QC.shrink p
+  shrink (ArrT v (p:ps))
+    = [VarT (TV "X")]
+    ++ [ArrT v (p':ps') | p' <- QC.shrink p, (ArrT _ ps') <- QC.shrink (ArrT v ps)]
+    ++ [ArrT v (p:ps') | (ArrT _ ps') <- QC.shrink (ArrT v ps)]
 
 arbitraryType :: Int -> [TVar] -> QC.Gen Type
 arbitraryType depth vs = QC.oneof [
       arbitraryType' depth vs
-    , Forall <$> pure (newvar vs) <*> arbitraryType depth (newvar vs : vs)
+    , Forall <$> pure (newvar' vs) <*> arbitraryType depth (newvar' vs : vs)
   ]
   where
     variables = [1..] >>= flip CM.replicateM ['a'..'z']
-    arrs = [("J", 1), ("K", 2), ("L", 3), ("M", 4)]
-    newvar vs' = TV (T.pack $ variables !! length vs')
+    newvar' vs' = TV (T.pack $ variables !! length vs')
 
 arbitraryType' :: Int -> [TVar] -> QC.Gen Type
 arbitraryType' 0 vs = atomicType vs
@@ -270,11 +264,9 @@ arbitraryType' depth vs = QC.oneof [
     , FunT <$> arbitraryType' (depth-1) vs <*> arbitraryType' (depth-1) vs
     , QC.elements [ExistT (TV "e1"), ExistT (TV "e2"), ExistT (TV "e3")]
     , QC.frequency [
-          (4, arbitraryArrT (depth-1) vs (TV "J") 1)
-        , (3, arbitraryArrT (depth-1) vs (TV "K") 2)
-        , (2, arbitraryArrT (depth-1) vs (TV "L") 3)
-        , (1, arbitraryArrT (depth-1) vs (TV "M") 4)
-        -- could do more, but I doubt there is much point
+          (3, arbitraryArrT (depth-1) vs (TV "J") 1)
+        , (2, arbitraryArrT (depth-1) vs (TV "K") 2)
+        , (1, arbitraryArrT (depth-1) vs (TV "L") 3)
       ]
   ]
 

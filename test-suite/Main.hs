@@ -148,29 +148,28 @@ Properties given:
     - ( length(#2) == length(#3.1) + 1 + length(#3.3) ) || #3 == Nothing
   access2 :: a -> a -> Gamma -> Maybe (Gamma, GammaIndex, Gamma, GammaIndex, Gamma)
     - ...
-  accessWith :: (Indexable a) => (GammaIndex -> GammaIndex) -> a -> Gamma -> Stack Gamma
-    - length #3 == length #4
-  accessWith2 :: ...
-    - ...
   ann :: Expr -> Type -> Expr
     - #1 == unannotate #3
     - #2 == annotationOf #3
 -}
 
-
--- subtypeOf :: Type -> Type -> Gamma -> Bool
--- subtypeOf t1 t2 g = case subtype t1 t2 g of
---   (Right _, _) -> True
---   (Left _, _) -> False
+subtypeOf :: Type -> Type -> Gamma -> Bool
+subtypeOf t1 t2 g =
+  case runStack (subtype t1 t2 g) 0 of
+    (Right _, _) -> True
+    (Left _, _) -> False
 
 propertyTests = testGroup "Property tests"
   [
+   -- generalization
      QC.testProperty "size(Gen(t)) >= size(t)" $
        \t -> typeSize (generalize t) >= typeSize t
-   -- , QC.testProperty "Gen(t) <: t" $
-   --     \t -> subtypeOf (generalize t) t []
+   -- substitution
    , QC.testProperty "size([v/<v>]t) == size(t)" $
        \(v,t) -> typeSize (substitute v t) == typeSize t
-   , QC.testProperty "Gen(t) == Gen([v/<v>]t)" $
-       \(v,t) -> generalize t == generalize (substitute v t)
+   -- subtype tests
+   , QC.testProperty "t <: t" $
+       \t -> subtypeOf t t []
+   -- , QC.testProperty "Gen(t) <: t" $
+   --     \t -> subtypeOf t (generalize t) []
   ]
