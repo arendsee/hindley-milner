@@ -3,6 +3,8 @@ module Xi.Infer (
   , subtype
   , substitute
   , apply
+  , applyE
+  , free
 ) where
 
 import Xi.Data

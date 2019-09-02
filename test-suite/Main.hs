@@ -6,6 +6,7 @@ import Xi.Infer
 import Xi.Parser
 import Xi.Data
 import Data.Text (unpack, Text)
+import qualified Data.Set as Set
 
 main = defaultMain tests
 
@@ -99,13 +100,14 @@ unitTests = testGroup "Unit tests"
                    "f :: forall a . a -> Bool; (((f :: Int -> Bool) (42 :: Int)) :: Bool)"
   ]
 
+-- remove all type annotations and type signatures
 unannotate :: Expr -> Expr
 unannotate (AnnE e t) = unannotate e
 unannotate (ListE xs) = ListE (map unannotate xs)
 unannotate (LamE v e) = LamE v (unannotate e)
 unannotate (AppE e1 e2) = AppE (unannotate e1) (unannotate e2)
 unannotate (Declaration v e1 e2) = Declaration v (unannotate e1) (unannotate e2)
-unannotate (Signature v t e) = Signature v t (unannotate e)
+unannotate (Signature v t e) = unannotate e
 unannotate e = e
 
 annotationOf :: Expr -> Maybe Type
@@ -129,14 +131,6 @@ Properties given:
   infer :: Gamma -> Expr -> Stack (Gamma, Type, Expr)
    - i4.2 == annotationOf(i4.3)
    - unannotate(i2) == unannotate(i4.3)
-  derive :: Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr)
-    - d2 must be a function
-  generalizeE :: Expr -> Expr
-    - unannotate(g1) == unannotate(g2)
-  apply :: Gamma -> Type -> Type
-    - size #2 <= size #3
-  applyE :: Gamma -> Expr -> Expr
-    - unannotate #2 == unannotate #3
 -}
 
 subtypeOf :: Type -> Type -> Gamma -> Bool
@@ -156,4 +150,16 @@ propertyTests = testGroup "Property tests"
    -- subtype tests
    , QC.testProperty "t <: t" $
        \t -> subtypeOf t t []
+   -- generalizeE tests
+   , QC.testProperty "unannotate(e) == unannotate(generalizeE(e))" $
+       \e -> unannotate e == unannotate (generalizeE e)
+   -- apply
+   , QC.testProperty "apply [] t == t" $
+      \t -> apply [] t == t
+   -- applyE
+   , QC.testProperty "applyE [] e == e" $
+      \e -> applyE [] e == e    
+   -- free
+   , QC.testProperty "length(free t) <= size t" $
+      \t -> Set.size (free t) <= typeSize t
   ]
