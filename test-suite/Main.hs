@@ -139,6 +139,17 @@ subtypeOf t1 t2 g =
     (Right _, _) -> True
     (Left _, _) -> False
 
+infer1 :: Expr -> Bool
+infer1 e = case runStack (infer [] e) 0 of
+  (Right (g, t, e'), _) -> infer1' t e' 
+  (Left e, _) -> False
+  where
+    infer1' t (Declaration _ _ e2) = infer1' t e2
+    infer1' t (Signature _ _ e2) = infer1' t e2
+    infer1' t e2 = case (annotationOf e2) of
+      (Just t') -> t' == t
+      Nothing -> False
+
 propertyTests = testGroup "Property tests"
   [
    -- generalization
@@ -162,4 +173,6 @@ propertyTests = testGroup "Property tests"
    -- free
    , QC.testProperty "length(free t) <= size t" $
       \t -> Set.size (free t) <= typeSize t
+   -- infer1 
+   , QC.testProperty "i4.2 == annotationOf(i4.3)" infer1
   ]

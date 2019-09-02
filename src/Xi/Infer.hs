@@ -5,6 +5,7 @@ module Xi.Infer (
   , apply
   , applyE
   , free
+  , infer
 ) where
 
 import Xi.Data
