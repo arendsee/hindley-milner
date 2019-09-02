@@ -105,6 +105,7 @@ unitTests = testGroup "Unit tests"
 unannotate :: Expr -> Expr
 unannotate (AnnE e t) = unannotate e
 unannotate (ListE xs) = ListE (map unannotate xs)
+unannotate (TupleE xs) = TupleE (map unannotate xs)
 unannotate (LamE v e) = LamE v (unannotate e)
 unannotate (AppE e1 e2) = AppE (unannotate e1) (unannotate e2)
 unannotate (Declaration v e1 e2) = Declaration v (unannotate e1) (unannotate e2)
@@ -123,17 +124,6 @@ typeSize (Forall _ t) = 1 + typeSize t
 typeSize (FunT t1 t2) = 1 + typeSize t1 + typeSize t2
 typeSize (ArrT _ xs) = 1 + sum (map typeSize xs) 
 
-{-
-Properties given:
-  check :: Gamma -> Expr -> Type -> Stack (Gamma, Type, Expr)
-   - c3 <: c4.2
-   - c4.2 == annotationOf(c4.3)
-   - unannotate(c2) == unannotate(c4.3)
-  infer :: Gamma -> Expr -> Stack (Gamma, Type, Expr)
-   - i4.2 == annotationOf(i4.3)
-   - unannotate(i2) == unannotate(i4.3)
--}
-
 subtypeOf :: Type -> Type -> Gamma -> Bool
 subtypeOf t1 t2 g =
   case runStack (subtype t1 t2 g) 0 of
@@ -150,6 +140,11 @@ infer1 e = case runStack (infer [] e) 0 of
     infer1' t e2 = case (annotationOf e2) of
       (Just t') -> t' == t
       Nothing -> False
+
+infer2 :: Expr -> Bool
+infer2 e = case runStack (infer [] e) 0 of
+  (Right (g, t, e'), _) -> unannotate e == unannotate e'
+  (Left e, _) -> False
 
 propertyTests = testGroup "Property tests"
   [
@@ -176,4 +171,6 @@ propertyTests = testGroup "Property tests"
       \t -> Set.size (free t) <= typeSize t
    -- infer1 
    , QC.testProperty "i4.2 == annotationOf(i4.3)" infer1
+   -- infer2 
+   , QC.testProperty "unannotate e == unannotate (infer e)" infer2
   ]

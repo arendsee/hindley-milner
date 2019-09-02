@@ -227,6 +227,7 @@ generalize t = generalize' existentialMap t where
 
 generalizeE :: Expr -> Expr
 generalizeE (ListE xs) = ListE (map generalizeE xs)
+generalizeE (TupleE xs) = TupleE (map generalizeE xs)
 generalizeE (LamE v e) = LamE v (generalizeE e)
 generalizeE (AppE e1 e2) = AppE (generalizeE e1) (generalizeE e2)
 generalizeE (AnnE e t) = ann (generalizeE e) (generalize t)
@@ -336,7 +337,7 @@ arbitraryExpr :: Int -> Int -> [(EVar, Expr)] -> [(EVar, Type)] -> QC.Gen Expr
 arbitraryExpr t n es ss = QC.oneof [
       arbitraryDeclaration t n es ss
     , arbitrarySignature   t n es ss
-    , arbitraryFinalExpression n es ss []
+    , arbitraryFinalE n es ss []
   ]
 
 evars = (map (\i -> (EV . T.pack) ('x':show i)) [0..])
@@ -347,7 +348,7 @@ arbitraryDeclaration t n es ss = do
   -- This is of course a spectacular limitation, but I adding type annotations
   -- to a generated expression seems a bit hard.
   let v = evars !! (length es + length ss)
-  e <- arbitraryFinalExpression n es ss []
+  e <- arbitraryFinalE n es ss []
   r <- arbitraryExpr (t-1) n ((v,e):es) ss
   return $ Declaration v e r
 
@@ -358,18 +359,32 @@ arbitrarySignature t n es ss = do
   r <- arbitraryExpr (t-1) n es ((v,e):ss)
   return $ Signature v e r
 
-arbitraryFinalExpression :: Int -> [(EVar, Expr)] -> [(EVar, Type)] -> [EVar] -> QC.Gen Expr
-arbitraryFinalExpression t es ss ls = QC.frequency [
-      (length(vars), QC.elements vars)
-    , (1+t, fmap (\p -> ListE [p] ) arbitraryPrimitive)
-    , (1+t, arbitraryPrimitive)
-    , (4*t,
-        let i = length es + length ss + length ls
-        in LamE <$> return (evars !! i) <*> arbitraryFinalExpression (t-1) es ss (evars !! i : ls)
-      )
-  ]
+arbitraryFinalE :: Int -> [(EVar, Expr)] -> [(EVar, Type)] -> [EVar] -> QC.Gen Expr
+arbitraryFinalE t es ss ls
+  | t > 1 = QC.frequency
+      [ (length(vars), QC.elements vars)
+      , (1+t, fmap (\p -> ListE [p] ) arbitraryPrimitive)
+      , (1+t, QC.frequency [ (2, arbitraryTuple 2 (t-1) es ss ls)
+                           , (1, arbitraryTuple 3 (t-1) es ss ls)])
+      , (1+t, arbitraryPrimitive)
+      , (4*t, LamE <$> return evar <*> arbitraryFinalE (t-1) es ss (evar : ls))
+      ]
+  | otherwise = QC.frequency
+      [ (length(vars), QC.elements vars)
+      , (1, arbitraryPrimitive)
+      ]
   where
     vars = [VarE v | v <- map fst es ++ map fst ss ++ ls]
+    evar = evars !! (length es + length ss + length ls)
+
+arbitraryTuple :: Int -> Int -> [(EVar, Expr)] -> [(EVar, Type)] -> [EVar] ->  QC.Gen Expr
+arbitraryTuple i t es ts ls
+  | i == 2 = TupleE <$> sequence [ arbitraryFinalE t es ts ls
+                                 , arbitraryFinalE t es ts ls]
+  | i == 3 = TupleE <$> sequence [ arbitraryFinalE t es ts ls
+                                 , arbitraryFinalE t es ts ls
+                                 , arbitraryFinalE t es ts ls]
+  | otherwise = return $ VarE (EV "clusterfuck")
 
 arbitraryPrimitive :: QC.Gen Expr
 arbitraryPrimitive = QC.oneof [

@@ -49,6 +49,7 @@ apply g (ArrT v ts) = ArrT v (map (apply g) ts)
 
 applyE :: Gamma -> Expr -> Expr
 applyE g (ListE xs) = ListE (map (applyE g) xs)
+applyE g (TupleE xs) = TupleE (map (applyE g) xs)
 applyE g (LamE v e) = LamE v (applyE g e)
 applyE g (AppE e1 e2) = AppE (applyE g e1) (applyE g e2)
 applyE g (AnnE e t) = ann (applyE g e) (apply g t)
