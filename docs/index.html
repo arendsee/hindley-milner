@@ -747,10 +747,9 @@ variables pulled out as universal quantifiers.</p>
    \(\frac{\expr{\Gamma, x:A}{e_2 \Rightarrow A}{\Delta}}{\expr{\Gamma}{x\ ::\ A\ ;\ e_2}{\Delta}}\) <span class="blue">Signature</span>
   <br>
   <br>
-   \(\frac{\Gamma\ \vdash\ x\Rightarrow A \quad \Gamma\ \vdash\ y\Rightarrow A}{\expr{\Gamma}{[x,y\ |\ \forall\ (x,y)\ \in\ \vec{xs}]}{\Delta}}\) <span class="blue">List</span>
-  <br>
-  <br>
-   \(\frac{\Gamma\ \vdash\ x\Rightarrow A \quad \Gamma\ \vdash\ y\Rightarrow A}{\expr{\Gamma}{[x,y\ |\ \forall\ (x,y)\ \in\ \vec{xs}]}{\Delta}}\) <span class="blue">Tuple</span>
+   \(\frac{\expr{\Gamma}{x_1 \Rightarrow A}{\Delta_1} \quad \expr{\Delta_1}{x_1 \Leftarrow A}{\Delta_2}\ ... \quad \expr{\Delta_{n-1}}{x_n \Leftarrow A}{\Delta_n}}{\expr{\Gamma}{[x_1,x_2, ... x_n]}{\Delta_n,\ \text{List}\ A}}\) <span class="blue">List</span>
+   \(\quad\quad\)
+   \(\frac{\expr{\Gamma}{x_1 \Rightarrow A_1}{\Delta_1} \quad ... \quad \expr{\Delta_{n-1}}{x_n \Rightarrow A_n}{\Delta_n}}{\expr{\Gamma}{(x_1,x_2, ... x_n)}{\Delta_n,\ \text{Tuple}\ A_1\ ...\  A_n}}\) <span class="blue">Tuple</span>
   <br>
   <br>
    \(\frac{}{\expr{\Gamma}{() \Rightarrow 1}{\Gamma}}\) <span class="green">1l⇒</span>
@@ -831,7 +830,7 @@ variables pulled out as universal quantifiers.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2019-09-02 16:26:00 -0500
+Last updated 2019-09-02 20:12:27 -0500
 </div>
 </div>
 <script type="text/x-mathjax-config">

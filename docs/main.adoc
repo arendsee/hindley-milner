@@ -148,10 +148,9 @@ variables pulled out as universal quantifiers.
    $\frac{\expr{\Gamma, x:A}{e_2 \Rightarrow A}{\Delta}}{\expr{\Gamma}{x\ ::\ A\ ;\ e_2}{\Delta}}$ [blue]+Signature+
    +
    +
-   $\frac{\Gamma\ \vdash\ x\Rightarrow A \quad \Gamma\ \vdash\ y\Rightarrow A}{\expr{\Gamma}{[x,y\ \|\ \forall\ (x,y)\ \in\ \vec{xs}\]}{\Delta}}$ [blue]+List+
-   +
-   +
-   $\frac{\Gamma\ \vdash\ x\Rightarrow A \quad \Gamma\ \vdash\ y\Rightarrow A}{\expr{\Gamma}{[x,y\ \|\ \forall\ (x,y)\ \in\ \vec{xs}\]}{\Delta}}$ [blue]+Tuple+
+   $\frac{\expr{\Gamma}{x_1 \Rightarrow A}{\Delta_1} \quad \expr{\Delta_1}{x_1 \Leftarrow A}{\Delta_2}\ ... \quad \expr{\Delta_{n-1}}{x_n \Leftarrow A}{\Delta_n}}{\expr{\Gamma}{[x_1,x_2, ... x_n\]}{\Delta_n,\ \text{List}\ A}}$ [blue]+List+
+   $\quad\quad$
+   $\frac{\expr{\Gamma}{x_1 \Rightarrow A_1}{\Delta_1} \quad ... \quad \expr{\Delta_{n-1}}{x_n \Rightarrow A_n}{\Delta_n}}{\expr{\Gamma}{(x_1,x_2, ... x_n)}{\Delta_n,\ \text{Tuple}\ A_1\ ...\  A_n}}$ [blue]+Tuple+
    +
    +
    $\frac{}{\expr{\Gamma}{() \Rightarrow 1}{\Gamma}}$ [green]+1l⇒+
