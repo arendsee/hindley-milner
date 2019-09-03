@@ -74,14 +74,14 @@ pNonStatementExpr
   <|> pVar
 
 pListE :: Parser Expr
-pListE = fmap ListE $ brackets (sepBy pExpr (char ','))
+pListE = fmap ListE $ brackets (sepBy pNonStatementExpr (symbol ","))
 
 pTuple :: Parser Expr
 pTuple = do
   _ <- symbol "("
   e <- pNonStatementExpr
   _ <- symbol ","
-  es <- sepBy1 pNonStatementExpr (char ',')
+  es <- sepBy1 pNonStatementExpr (symbol ",")
   _ <- symbol ")"
   return (TupleE (e:es))
 

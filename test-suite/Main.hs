@@ -5,7 +5,7 @@ import Test.Tasty.QuickCheck as QC
 import Xi.Infer
 import Xi.Parser
 import Xi.Data
-import Data.Text (unpack, Text)
+import Data.Text (unpack, pack, Text)
 import qualified Data.Set as Set
 
 main = defaultMain tests
@@ -54,6 +54,8 @@ forall (s:ss) t = Forall (TV s) (forall ss t)
 var s = VarT (TV s)
 arr s ts = ArrT (TV s) ts 
 lst t = arr "List" [t]
+tuple ts = ArrT v ts where
+  v = (TV . pack) ("Tuple" ++ show (length ts))
 
 unitTests = testGroup "Unit tests"
   [
@@ -89,6 +91,8 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "apply :: (Int -> Bool) -> Int -> Bool; f :: Int -> Bool; apply f 42"  bool 
     , exprTestGood "apply :: forall a b . (a->b) -> a -> b; f :: Int -> Bool; apply f 42" bool
     , exprTestGood "[1,2,3]" (lst int)
+    , exprTestGood "f :: forall a . a -> a; [53, f 34]" (lst int)
+    , exprTestGood "f :: forall a . a -> a; (f 53, True)" (tuple [int, bool])
     , exprTestGood "[]" (forall ["a"] (lst (var "a")))
     , exprTestGood "f :: [Int] -> Bool; f [1]" bool
     , exprTestGood "f :: forall a . [a] -> Bool; f [1]" bool

@@ -344,18 +344,29 @@ infer g e1@(ListE []) = do
   return (g +> t, t', ann e1 t')
 infer g e1@(ListE (x:xs)) = do 
   (g', t', _) <- infer g x
-  mapM (\x' -> check g x' t') xs 
+  g'' <- checkAll g' xs t'
   let t'' = ArrT (TV "List") [t']
-  return (g', t'', ann e1 t'')
+  return (g'', t'', ann e1 t'')
+  where
+    checkAll :: Gamma -> [Expr] -> Type -> Stack Gamma
+    checkAll g [] _ = return g  
+    checkAll g (e:es) t = do
+      (g', _, _) <- check g e t
+      checkAll g' es t
 infer g (TupleE []) = error "Illegal tuple (length must be greater than 1)"
 infer g (TupleE [x]) = error "Illegal tuple (length must be greater than 1)"
 infer g (TupleE xs) = do
+  (g', ts, es) <- inferAll g (reverse xs) [] []
   let v = TV . T.pack $ "Tuple" ++ (show (length xs))
-  elements <- mapM (\x -> infer g x) xs
-  let ts = map (\(_,t,_) -> t) elements
-      es = map (\(_,_,e) -> e) elements
       t = ArrT v ts
-  return (g, t, AnnE (TupleE es) t)
+      e = TupleE es
+  return (g, t, AnnE e t)
+  where
+    inferAll :: Gamma -> [Expr] -> [Type] -> [Expr] -> Stack (Gamma, [Type], [Expr])
+    inferAll g [] ts es = return (g, ts, es)
+    inferAll g (x:xs) ts es = do
+      (g', t', e') <- infer g x
+      inferAll g' xs (t':ts) (e':es)
 
 -- | Pattern matches against each type
 check
