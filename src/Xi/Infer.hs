@@ -13,6 +13,8 @@ import Control.Monad (replicateM)
 import qualified Data.Text as T
 import qualified Data.Set as Set
 
+import Debug.Trace (trace)
+
 typecheck :: Expr -> Stack Expr
 typecheck e = fmap (generalizeE . (\(_, _, e') -> e')) (infer [] e)
 
@@ -43,7 +45,7 @@ apply g (FunT a b) = FunT (apply g a) (apply g b)
 apply g (Forall x a) = Forall x (apply g a)
 -- [G[a=t]]a = [G[a=t]]t
 apply g a@(ExistT v) = case lookupT v g of
-  (Just t') -> apply g t' -- reduce an existential; strictly smaller term
+  (Just t') -> trace (show t') $ apply g t' -- reduce an existential; strictly smaller term
   Nothing -> a
 apply g (ArrT v ts) = ArrT v (map (apply g) ts) 
 
@@ -248,9 +250,17 @@ instantiate ta@(ExistT v) tb g1 = do
 instantiate _ _ g = do
   return g
 
+show' :: Show a => a -> T.Text
+show' = T.pack . show
+
 applyConcrete :: Expr -> Expr -> Type -> Stack Expr
 applyConcrete (AnnE e1 _) e2@(AnnE _ a) c = return $ AnnE (AppE (AnnE e1 (FunT a c)) e2) c
-applyConcrete _ _ _ = throwError $ OtherError "Expected annotated types in applyConcrete"
+applyConcrete e1 e2 t
+  =  throwError . OtherError
+  $  "Expected annotatated types in applyConcrete, got:\n  > "
+  <> show' e1 <> "\n  > "
+  <> show' e2 <> "\n  > "
+  <> show' t
 
 infer
   :: Gamma
@@ -442,7 +452,7 @@ derive g e (ExistT v) = do
   a <- newvar
   b <- newvar
   let g' = g +> a +> b +> SolvedG v (FunT a b)
-  (g'', _, _) <- check g' e a
-  return (g'', apply g'' b, applyE g'' e)
+  (g'', _, e') <- check g' e a
+  return (g'', apply g'' b, applyE g'' e')
 
 derive _ _ _ = throwError NonFunctionDerive

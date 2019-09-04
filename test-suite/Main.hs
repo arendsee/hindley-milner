@@ -42,6 +42,14 @@ exprTestBad e
       (Right _, _) -> assertFailure . unpack $ "Expected '" <> e <> "' to fail"
       (Left _, _) -> return ()
 
+expectError :: Text -> TypeError -> TestTree
+expectError expr err = testCase ("Fails?: " <> unpack expr)
+  $ case runStack (typecheck (readExpr expr)) 0 of
+      (Right _, _) -> assertFailure . unpack $ "Expected failure"
+      (Left err, _) -> return ()
+      (Left err', _) -> assertFailure
+        $ "Expected error (" <> show err <> ") got error (" <> show err' <> ")"
+
 int = VarT (TV "Int")
 bool = VarT (TV "Bool")
 num = VarT (TV "Num")
@@ -96,11 +104,34 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "[]" (forall ["a"] (lst (var "a")))
     , exprTestGood "f :: [Int] -> Bool; f [1]" bool
     , exprTestGood "f :: forall a . [a] -> Bool; f [1]" bool
+    -- * higher order functions
     , exprTestGood "map :: forall a b . (a->b) -> [a] -> [b]; f :: Int -> Bool; map f [5,2]" (lst bool)
-    -- failing tests
+
+    -- This works:
+    , exprTestGood "f :: forall a . a -> a; g :: forall b . b -> Int; g f" int
+    -- But this loops forever:
+    -- , exprTestGood "f :: forall a . a -> a; g :: forall a . a -> Int; g f" int
+    --                             ^                       ^
+    --         variable reuse -----'-----------------------'
+    --   This case is not found in quickcheck because variable names are not
+    --   reused by the type generator. I should instead bind random variable
+    --   names under the foralls and lambdas.
+
+    -- failing tests ----------------------------------------------------------
+    -- * heterogenous list
     , exprTestBad "[1,2,True]"
-    , exprTestBad "\\x -> y" -- unbound variable
-    -- internal
+    -- * unbound variable
+    , exprTestBad "\\x -> y"
+    -- * too many arguments
+    , exprTestBad "f :: forall a . a; f Bool 12"
+    -- * arguments have the wrong type
+    , exprTestBad "abs :: Int -> Int; abs True"
+    -- -- * arguments to a function are monotypes
+    -- , expectError   "f :: forall a . a -> a; g = \\h -> (h 42, h True); g f"
+    --                 (SubtypeError int bool)
+    -- , exprTestGood  "f :: forall a . a -> a; g = \\h -> (h 42, h 1234); g f"
+    --                 (tuple [int, int])
+    -- internal ---------------------------------------------------------------
     , exprTestFull "f :: forall a . a -> Bool; f 42"
                    "f :: forall a . a -> Bool; (((f :: Int -> Bool) (42 :: Int)) :: Bool)"
   ]
