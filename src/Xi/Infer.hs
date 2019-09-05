@@ -1,11 +1,17 @@
 module Xi.Infer (
+  -- * The main type checker
     typecheck
+  -- * Internal functions used in testing
   , subtype
   , substitute
   , apply
   , applyE
   , free
   , infer
+  , renameExpr
+  , unrenameExpr
+  , renameType
+  , unrenameType
 ) where
 
 import Xi.Data
@@ -13,25 +19,74 @@ import Control.Monad (replicateM)
 import qualified Data.Text as T
 import qualified Data.Set as Set
 
-import Debug.Trace (trace)
-
 typecheck :: Expr -> Stack Expr
-typecheck e = fmap (generalizeE . (\(_, _, e') -> e')) (infer [] e)
+typecheck e = do
+  e' <- renameExpr e
+  (_, _, e'') <- infer [] e'
+  return (generalizeE (unrenameExpr e''))
+
+renameExpr :: Expr -> Stack Expr
+renameExpr (LamE v e) = LamE <$> pure v <*> renameExpr e
+renameExpr (ListE es) = ListE <$> mapM renameExpr es
+renameExpr (TupleE es) = TupleE <$> mapM renameExpr es
+renameExpr (AppE e1 e2) = AppE <$> renameExpr e1 <*> renameExpr e2
+renameExpr (AnnE e t) = AnnE <$> renameExpr e <*> renameType t
+renameExpr (Declaration v e1 e2) = Declaration <$> pure v <*> renameExpr e1 <*> renameExpr e2
+renameExpr (Signature v t e) = Signature <$> pure v <*> renameType t <*> renameExpr e
+renameExpr e = return e
+
+renameType :: Type -> Stack Type
+renameType UniT = return UniT 
+renameType t@(VarT _) = return t
+renameType t@(ExistT _) = return t
+renameType (Forall v t) = do
+  v' <- newqul v
+  t' <- renameType (substitute' v (VarT v') t)
+  return $ Forall v' t'
+renameType (FunT t1 t2) = FunT <$> renameType t1 <*> renameType t2
+renameType (ArrT v ts) = ArrT <$> pure v <*> mapM renameType ts
+
+unrenameExpr :: Expr -> Expr
+unrenameExpr (LamE v e) = LamE v (unrenameExpr e)
+unrenameExpr (ListE es) = ListE (map unrenameExpr es)
+unrenameExpr (TupleE es) = TupleE (map unrenameExpr es)
+unrenameExpr (AppE e1 e2) = AppE (unrenameExpr e1) (unrenameExpr e2)
+unrenameExpr (AnnE e t) = AnnE (unrenameExpr e) (unrenameType t)
+unrenameExpr (Declaration v e1 e2) = Declaration v (unrenameExpr e1) (unrenameExpr e2)
+unrenameExpr (Signature v t e) = Signature v (unrenameType t) (unrenameExpr e)
+unrenameExpr e = e
+
+unrename :: TVar -> TVar
+unrename (TV t) = TV . head $ T.splitOn "." t
+
+unrenameType :: Type -> Type
+unrenameType UniT = UniT 
+unrenameType (VarT v) = VarT (unrename v)
+unrenameType t@(ExistT _) = t
+unrenameType (Forall v t) = Forall (unrename v) (unrenameType t)
+unrenameType (FunT t1 t2) = FunT (unrenameType t1) (unrenameType t2)
+unrenameType (ArrT v ts) = ArrT v (map unrenameType ts)
 
 
 -- | substitute all appearances of a given variable with an existential
 -- [t/v]A
-substitute :: TVar -> Type -> Type
-substitute v t@(VarT v')
-  | v == v' = ExistT v
-  | otherwise = t
-substitute v (FunT t1 t2) = FunT (substitute v t1) (substitute v t2)
-substitute v t@(Forall x t')
-  | v /= x = Forall x (substitute v t')
-  | otherwise = t -- allows shadowing of the variable
-substitute v (ArrT v' ts) = ArrT v' (map (substitute v) ts)
-substitute _ t = t
+substitute' :: TVar -> Type -> Type -> Type
+substitute' v r t = sub t where
+  sub :: Type -> Type
+  sub t@(VarT v')
+    | v == v' = r
+    | otherwise = t
+  sub (FunT t1 t2) = FunT (sub t1) (sub t2)
+  sub t@(Forall x t')
+    | v /= x = Forall x (sub t')
+    | otherwise = t -- allows shadowing of the variable
+  sub (ArrT v' ts) = ArrT v' (map sub ts)
+  sub t' = t'
 
+-- | substitute all appearances of a given variable with an existential
+-- [t/v]A
+substitute :: TVar -> Type -> Type
+substitute v t = substitute' v (ExistT v) t
 
 -- | Apply a context to a type (See Dunfield Figure 8).
 apply :: Gamma -> Type -> Type
@@ -45,7 +100,7 @@ apply g (FunT a b) = FunT (apply g a) (apply g b)
 apply g (Forall x a) = Forall x (apply g a)
 -- [G[a=t]]a = [G[a=t]]t
 apply g a@(ExistT v) = case lookupT v g of
-  (Just t') -> trace (show t') $ apply g t' -- reduce an existential; strictly smaller term
+  (Just t') -> apply g t' -- reduce an existential; strictly smaller term
   Nothing -> a
 apply g (ArrT v ts) = ArrT v (map (apply g) ts) 
 
@@ -229,7 +284,8 @@ instantiate ta tb@(ExistT v) g1 =
     (Just (ls, _, rs)) -> return $ ls ++ (SolvedG v ta):rs
     Nothing -> case access1 (SolvedG v ta) g1 of
       (Just _) -> return g1
-      Nothing -> error "error in InstRSolve"
+      Nothing -> throwError . OtherError $
+        "Error in InstRSolve: ta=(" <> show' ta <> ") tb=(" <> show' tb <> ") g1=(" <> show' g1 <> ")"
 --  g1 |- t
 -- ----------------------------------------- instLSolve
 --  g1,Ea,g2 |- Ea <=: t -| g1,Ea=t,g2
@@ -341,7 +397,7 @@ infer g e1@(AnnE e@(VarE _) t) = do
   -- `x::Int`, and is not declared, this would normally raise an
   -- UnboundVariable error. However, it is convenient for testing purposes, and
   -- also for Morloc where functions are imported as black boxes from other
-  -- langugaes, to be able to simply declare a type as an axiom. Perhaps I
+  -- languages, to be able to simply declare a type as an axiom. Perhaps I
   -- should add dedicated syntax for axiomatic type declarations?
   case lookupE e g of
     (Just _) -> check g e t

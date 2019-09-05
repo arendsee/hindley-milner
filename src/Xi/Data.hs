@@ -23,6 +23,7 @@ module Xi.Data
   , generalizeE
   -- * State manipulation
   , newvar
+  , newqul
   -- * Config handling
   , verbosity
 ) where
@@ -61,8 +62,9 @@ newtype TVar = TV T.Text deriving(Show, Eq, Ord)
 
 data StackState = StackState {
       stateVar :: Int
+    , stateQul :: Int
   } deriving(Ord, Eq, Show)
-emptyState = StackState 0
+emptyState = StackState 0 0
 
 data StackConfig = StackConfig {
       configVerbosity :: Int 
@@ -243,6 +245,14 @@ newvar = do
   return (ExistT $ TV v)
   where
     newvars = zipWith (\x y -> T.pack (x ++ show y)) (repeat "t") ([0..] :: [Integer])
+
+newqul :: TVar -> Stack TVar
+newqul (TV v) = do
+  s <- MS.get
+  let v' = TV (v <> "." <> (T.pack . show $ stateQul s)) -- create a new variable such as "a.0"
+  MS.put $ s {stateQul = stateQul s + 1}
+  return v'
+
 
 class Indexable a where
   index :: a -> GammaIndex

@@ -106,17 +106,11 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "f :: forall a . [a] -> Bool; f [1]" bool
     -- * higher order functions
     , exprTestGood "map :: forall a b . (a->b) -> [a] -> [b]; f :: Int -> Bool; map f [5,2]" (lst bool)
-
-    -- This works:
+    , exprTestGood "f = \\x -> (14,x); g = \\x f -> f x; g True f" (tuple [int, bool])
+    -- * fails to terminate when qualified type variables are not distinguished
+    -- See commit 7ffd52a
+    , exprTestGood "f :: forall a . a -> a; g :: forall a . a -> Int; g f" int
     , exprTestGood "f :: forall a . a -> a; g :: forall b . b -> Int; g f" int
-    -- But this loops forever:
-    -- , exprTestGood "f :: forall a . a -> a; g :: forall a . a -> Int; g f" int
-    --                             ^                       ^
-    --         variable reuse -----'-----------------------'
-    --   This case is not found in quickcheck because variable names are not
-    --   reused by the type generator. I should instead bind random variable
-    --   names under the foralls and lambdas.
-
     -- failing tests ----------------------------------------------------------
     -- * heterogenous list
     , exprTestBad "[1,2,True]"
@@ -126,11 +120,11 @@ unitTests = testGroup "Unit tests"
     , exprTestBad "f :: forall a . a; f Bool 12"
     -- * arguments have the wrong type
     , exprTestBad "abs :: Int -> Int; abs True"
-    -- -- * arguments to a function are monotypes
-    -- , expectError   "f :: forall a . a -> a; g = \\h -> (h 42, h True); g f"
-    --                 (SubtypeError int bool)
-    -- , exprTestGood  "f :: forall a . a -> a; g = \\h -> (h 42, h 1234); g f"
-    --                 (tuple [int, int])
+    -- * arguments to a function are monotypes
+    , expectError   "f :: forall a . a -> a; g = \\h -> (h 42, h True); g f"
+                    (SubtypeError int bool)
+    , exprTestGood  "f :: forall a . a -> a; g = \\h -> (h 42, h 1234); g f"
+                    (tuple [int, int])
     -- internal ---------------------------------------------------------------
     , exprTestFull "f :: forall a . a -> Bool; f 42"
                    "f :: forall a . a -> Bool; (((f :: Int -> Bool) (42 :: Int)) :: Bool)"
@@ -179,13 +173,20 @@ infer1 e = case runStack (infer [] e) 0 of
 infer2 :: Expr -> Bool
 infer2 e = case runStack (infer [] e) 0 of
   (Right (g, t, e'), _) -> unannotate e == unannotate e'
-  (Left e, _) -> False
+  (Left _, _) -> False
+
+renameTest :: Expr -> Bool
+renameTest e = case runStack (renameExpr e) 0 of
+  (Right e', _) -> unrenameExpr e' == e
+  (Left _, _) -> False
 
 propertyTests = testGroup "Property tests"
   [
    -- generalization
      QC.testProperty "size(Gen(t)) >= size(t)" $
        \t -> typeSize (generalize t) >= typeSize t
+   -- quantifier term renaming
+   , QC.testProperty "e == unrename(rename e)" renameTest
    -- substitution
    , QC.testProperty "size([v/<v>]t) == size(t)" $
        \(v,t) -> typeSize (substitute v t) == typeSize t
