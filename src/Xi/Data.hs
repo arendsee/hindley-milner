@@ -26,6 +26,9 @@ module Xi.Data
   , newqul
   -- * Config handling
   , verbosity
+  -- * pretty printing
+  , prettyExpr
+  , prettyType
 ) where
 
 import qualified Data.List as DL
@@ -39,6 +42,9 @@ import qualified Control.Monad as CM
 import qualified Data.Text as T
 import qualified Test.QuickCheck as QC
 import qualified Data.Set as Set
+import Data.Text.Prettyprint.Doc
+import Data.Text.Prettyprint.Doc.Render.Terminal
+import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
 
 type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s MI.Identity))) a
 type Stack a = GeneralStack StackConfig TypeError [T.Text] StackState a
@@ -415,3 +421,48 @@ instance QC.Arbitrary TVar where
 instance QC.Arbitrary EVar where
   arbitrary = undefined
   shrink = undefined
+
+
+typeStyle = SetAnsiStyle {
+      ansiForeground  = Just (Vivid, Green) -- ^ Set the foreground color, or keep the old one.
+    , ansiBackground  = Nothing             -- ^ Set the background color, or keep the old one.
+    , ansiBold        = Nothing             -- ^ Switch on boldness, or don’t do anything.
+    , ansiItalics     = Nothing             -- ^ Switch on italics, or don’t do anything.
+    , ansiUnderlining = Just Underlined     -- ^ Switch on underlining, or don’t do anything.
+  } 
+
+prettyExpr :: Expr -> Doc AnsiStyle
+prettyExpr UniE = "()"
+prettyExpr (VarE (EV s)) = pretty s
+prettyExpr (LamE (EV n) e) = "\\" <> pretty n <+> "->" <+> prettyExpr e
+prettyExpr (AnnE e t) = parens (prettyExpr e <+> "::" <+> prettyGreenType t)
+prettyExpr (AppE e1@(LamE _ _) e2) = parens (prettyExpr e1) <+> prettyExpr e2
+prettyExpr (AppE e1 e2) = prettyExpr e1 <+> prettyExpr e2
+prettyExpr (IntE x) = pretty x
+prettyExpr (NumE x) = pretty x
+prettyExpr (StrE x) = dquotes (pretty x)
+prettyExpr (LogE x) = pretty x
+prettyExpr (Declaration (EV v) e1 e2) = pretty v <+> "=" <+> prettyExpr e1 <> line <> prettyExpr e2
+prettyExpr (Signature (EV v) t e2) = pretty v <+> "::" <+> prettyGreenType t <> line <> prettyExpr e2
+prettyExpr (ListE xs) = list (map prettyExpr xs)
+prettyExpr (TupleE xs) = tupled (map prettyExpr xs)
+
+forallVars :: Type -> [Doc a]
+forallVars (Forall (TV s) t) = pretty s : forallVars t
+forallVars _ = []
+
+forallBlock :: Type -> Doc a
+forallBlock (Forall _ t) = forallBlock t
+forallBlock t = prettyType t
+
+prettyGreenType :: Type -> Doc AnsiStyle 
+prettyGreenType t = annotate typeStyle (prettyType t)
+
+prettyType :: Type -> Doc ann
+prettyType UniT = "1"
+prettyType (VarT (TV s)) = pretty s
+prettyType (FunT t1@(FunT _ _) t2) = parens (prettyType t1) <+> "->" <+> prettyType t2
+prettyType (FunT t1 t2) = prettyType t1 <+> "->" <+> prettyType t2
+prettyType t@(Forall _ _) = "forall" <+> hsep (forallVars t) <+> "." <+> forallBlock t
+prettyType (ExistT (TV e)) = "<" <> pretty e <> ">"
+prettyType (ArrT (TV v) ts) = pretty v <+> hsep (map prettyType ts)

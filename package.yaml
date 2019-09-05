@@ -16,6 +16,8 @@ dependencies:
 - text
 - megaparsec
 - QuickCheck
+- prettyprinter
+- prettyprinter-ansi-terminal
 
 default-extensions:
   - OverloadedStrings
