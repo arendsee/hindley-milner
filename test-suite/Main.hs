@@ -125,6 +125,18 @@ unitTests = testGroup "Unit tests"
                     (SubtypeError int bool)
     , exprTestGood  "f :: forall a . a -> a; g = \\h -> (h 42, h 1234); g f"
                     (tuple [int, int])
+    -- * find misuses
+    , exprTestBad "f = 14; g = \\x h -> h x; (g True) f"
+    --             ^               ^    ^ this should fail
+    -- ------------+---------------'----'
+
+    -- These should all fail, since f is not a function
+    , expectError "f = 5; g = \\x -> f x; g 12" NonFunctionDerive
+    , expectError "f = 5; g = \\h -> h 5; g f" NonFunctionDerive
+    , exprTestGood "\\f -> f 5" 
+                   (forall ["a"] (fun [fun [int, var "a"], var "a"]))
+                   -- forall a . (Int -> a) -> a
+
     -- internal ---------------------------------------------------------------
     , exprTestFull "f :: forall a . a -> Bool; f 42"
                    "f :: forall a . a -> Bool; (((f :: Int -> Bool) (42 :: Int)) :: Bool)"

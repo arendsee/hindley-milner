@@ -29,6 +29,7 @@ module Xi.Data
   -- * pretty printing
   , prettyExpr
   , prettyType
+  , desc
 ) where
 
 import qualified Data.List as DL
@@ -466,3 +467,29 @@ prettyType (FunT t1 t2) = prettyType t1 <+> "->" <+> prettyType t2
 prettyType t@(Forall _ _) = "forall" <+> hsep (forallVars t) <+> "." <+> forallBlock t
 prettyType (ExistT (TV e)) = "<" <> pretty e <> ">"
 prettyType (ArrT (TV v) ts) = pretty v <+> hsep (map prettyType ts)
+
+class Describable a where
+  desc :: a -> String
+
+instance Describable Expr where
+  desc (UniE) = "UniE"
+  desc (VarE (EV v)) = "VarE:" ++ T.unpack v
+  desc (ListE _) = "ListE"
+  desc (TupleE _) = "Tuple"
+  desc (LamE (EV v) _) = "LamE:" ++ T.unpack v
+  desc (AppE e1 e2) = "AppE (" ++ desc e1 ++ ") (" ++ desc e2 ++ ")"
+  desc (AnnE e t) = "AnnE (" ++ desc e ++ ")"
+  desc (IntE x) = "IntE:" ++ show x
+  desc (NumE x) = "NumE:" ++ show x
+  desc (LogE x) = "LogE:" ++ show x
+  desc (StrE x) = "StrE:" ++ show x
+  desc (Declaration (EV e) _ _) = "Declaration:" ++ T.unpack e
+  desc (Signature (EV e) _ _) = "Signature:" ++ T.unpack e
+
+instance Describable Type where
+  desc (UniT) = "UniT"
+  desc (VarT (TV v)) = "VarT:" ++ T.unpack v
+  desc (ExistT (TV v)) = "ExistT:" ++ T.unpack v
+  desc (Forall (TV v) t) = "Forall:" ++ T.unpack v
+  desc (FunT t1 t2) = "FunT (" ++ desc t1 ++ ") (" ++ desc t2 ++ ")"
+  desc (ArrT (TV v) xs) = "ArrT:" ++ T.unpack v ++ " " ++ (concat . map desc) xs

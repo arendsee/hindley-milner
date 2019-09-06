@@ -19,11 +19,13 @@ import Control.Monad (replicateM)
 import qualified Data.Text as T
 import qualified Data.Set as Set
 
+-- import Debug.Trace
+
 typecheck :: Expr -> Stack Expr
 typecheck e = do
   e' <- renameExpr e
-  (_, _, e'') <- infer [] e'
-  return (generalizeE (unrenameExpr e''))
+  (g, t, e'') <- infer [] e'
+  return $ generalizeE (unrenameExpr e'')
 
 renameExpr :: Expr -> Stack Expr
 renameExpr (LamE v e) = LamE <$> pure v <*> renameExpr e
@@ -141,18 +143,21 @@ occursCheckExpr _ _ = return ()
 
 -- | type 1 is more polymorphic than type 2 (Dunfield Figure 9)
 subtype :: Type -> Type -> Gamma -> Stack Gamma
+subtype t1 t2 g = do
+  -- traceM (":>" ++ (desc t1) ++ " | " ++ desc t2)
+  subtype' t1 t2 g
 --
 -- ----------------------------------------- Unit
 --  G |- 1 <: 1 -| G
-subtype UniT UniT g = return g
+subtype' UniT UniT g = return g
 --
 -- ----------------------------------------- <:Var
 --  G[a] |- a <: a -| G[a]
-subtype t1@(VarT a1) t2@(VarT a2) g = do
+subtype' t1@(VarT a1) t2@(VarT a2) g = do
   if (a1 == a2)
   then return g
   else throwError $ SubtypeError t1 t2
-subtype a@(ExistT a1) b@(ExistT a2) g
+subtype' a@(ExistT a1) b@(ExistT a2) g
   --
   -- ----------------------------------------- <:Exvar
   --  G[E.a] |- Ea <: Ea -| G[E.a]
@@ -169,13 +174,13 @@ subtype a@(ExistT a1) b@(ExistT a2) g
 --  g2 |- [g2]A2 <: [g2]B2 -| g3
 -- ----------------------------------------- <:-->
 --  g1 |- A1 -> A2 <: B1 -> B2 -| g3
-subtype (FunT a1 a2) (FunT b1 b2) g1 = do
+subtype' (FunT a1 a2) (FunT b1 b2) g1 = do
   -- function subtypes are *contravariant* with respect to the input, that is,
   -- the subtypes are reversed so we have b1<:a1 instead of a1<:b1.
   g2 <- subtype b1 a1 g1
   subtype (apply g2 a2) (apply g2 b2) g2
-subtype (ArrT v1 []) (ArrT v2 []) g = subtype (VarT v1) (VarT v2) g
-subtype (ArrT v1 vs1) (ArrT v2 vs2) g = do
+subtype' (ArrT v1 []) (ArrT v2 []) g = subtype (VarT v1) (VarT v2) g
+subtype' (ArrT v1 vs1) (ArrT v2 vs2) g = do
   subtype (VarT v1) (VarT v2) g
   compareArr vs1 vs2 g
   where
@@ -194,25 +199,25 @@ subtype (ArrT v1 vs1) (ArrT v2 vs2) g = do
 --  g1[Ea] |- A <=: Ea -| g2
 -- ----------------------------------------- <:InstantiateR
 --  g1[Ea] |- A <: Ea -| g2
-subtype a b@(ExistT _) g = occursCheck a b >> instantiate a b g 
+subtype' a b@(ExistT _) g = occursCheck a b >> instantiate a b g 
 
 --  Ea not in FV(a)
 --  g1[Ea] |- Ea <=: A -| g2
 -- ----------------------------------------- <:InstantiateL
 --  g1[Ea] |- Ea <: A -| g2
-subtype a@(ExistT _) b g = occursCheck b a >> instantiate a b g 
+subtype' a@(ExistT _) b g = occursCheck b a >> instantiate a b g 
 
 --  g1,>Ea,Ea |- [Ea/x]A <: B -| g2,>Ea,g3
 -- ----------------------------------------- <:ForallL
 --  g1 |- Forall x . A <: B -| g2
-subtype (Forall x a) b g = subtype (substitute x a) b (g +> MarkG x +> ExistG x) >>= cut (MarkG x)
+subtype' (Forall x a) b g = subtype (substitute x a) b (g +> MarkG x +> ExistG x) >>= cut (MarkG x)
 
 --  g1,a |- A :> B -| g2,a,g3
 -- ----------------------------------------- <:ForallR
 --  g1 |- A <: Forall a. B -| g2
-subtype a (Forall v b) g = subtype a b (g +> VarG v) >>= cut (VarG v)
+subtype' a (Forall v b) g = subtype a b (g +> VarG v) >>= cut (VarG v)
 
-subtype a b _ = throwError $ SubtypeError a b 
+subtype' a b _ = throwError $ SubtypeError a b 
 
 
 -- | Dunfield Figure 10 -- type-level structural recursion
@@ -326,38 +331,41 @@ infer
     , Type -- The return type
     , Expr -- The annotated expression
   )
+infer g e = do
+  -- traceM ("i> " ++ desc e)
+  infer' g e
 -- --
 -- ----------------------------------------- <primitive>
 --  g |- <primitive expr> => <primitive type> -| g
 -- --
-infer g UniE = return (g, UniT, ann UniE UniT) 
+infer' g UniE = return (g, UniT, ann UniE UniT) 
 -- Num=>
-infer g e@(NumE _) = return (g, t, ann e t) where
+infer' g e@(NumE _) = return (g, t, ann e t) where
   t = VarT (TV "Num")
 -- Int=>
-infer g e@(IntE _) = return (g, t, ann e t) where
+infer' g e@(IntE _) = return (g, t, ann e t) where
   t = VarT (TV "Int")
 -- Str=> 
-infer g e@(StrE _) = return (g, t, ann e t) where
+infer' g e@(StrE _) = return (g, t, ann e t) where
   t = VarT (TV "Str")
 -- Log=> 
-infer g e@(LogE _) = return (g, t, ann e t) where
+infer' g e@(LogE _) = return (g, t, ann e t) where
   t = VarT (TV "Bool")
 -- Declaration=>
-infer g (Declaration v e1 e2) = do
+infer' g (Declaration v e1 e2) = do
   occursCheckExpr g v
   (_, t1', e1') <- infer g e1
   (g'', t2', e2') <- infer (g +> AnnG (VarE v) (generalize t1')) e2
   return (g'', t2', Declaration v (generalizeE e1') e2')
 -- Signature=>
-infer g (Signature v t e2) = do
+infer' g (Signature v t e2) = do
   (g', t', e2') <- infer (g +> AnnG (VarE v) t) e2
   return $ (g', t', Signature v t e2')
 
 --  (x:A) in g
 -- ------------------------------------------- Var
 --  g |- x => A -| g
-infer g e@(VarE v) = do
+infer' g e@(VarE v) = do
   case lookupE e g of
     (Just t) -> return (g, t, ann e t)
     Nothing -> throwError (UnboundVariable v)
@@ -365,24 +373,24 @@ infer g e@(VarE v) = do
 --  g1,Ea,Eb,x:Ea |- e <= Eb -| g2,x:Ea,g3
 -- ----------------------------------------- -->I=>
 --  g1 |- \x.e => Ea -> Eb -| g2
-infer g1 (LamE v e2) = do
+infer' g1 (LamE v e2) = do
   a <- newvar
   b <- newvar
   let anng = AnnG (VarE v) a
-      g' = g1 +> a +> b +> anng
-  (g'', t, e2') <- check g' e2 b
-  case lookupE (VarE v) g'' of
+      g2 = g1 +> a +> b +> anng
+  (g3, t, e2') <- check g2 e2 b
+  case lookupE (VarE v) g3 of
     (Just a') -> do
-      g2 <- cut anng g''
-      let t' = FunT a' t
-      return (g2, t', ann (LamE v e2') t')
+      let t' = FunT (apply g3 a') t
+      g4 <- cut anng g3
+      return (g4, t', ann (LamE v e2') t')
     Nothing -> throwError UnknownError
 
 --  g1 |- e1 => A -| g2
 --  g2 |- [g2]A o e2 =>> C -| g3
 -- ----------------------------------------- -->E
 --  g1 |- e1 e2 => C -| g3
-infer g1 (AppE e1 e2) = do
+infer' g1 (AppE e1 e2) = do
   (g2, a, e1') <- infer g1 e1
   (g3, c, e2') <- derive g2 e2 (apply g2 a)
   e3 <- applyConcrete e1' e2' c
@@ -392,7 +400,7 @@ infer g1 (AppE e1 e2) = do
 --  g1 |- e <= A -| g2
 -- ----------------------------------------- Anno
 --  g1 |- (e:A) => A -| g2
-infer g e1@(AnnE e@(VarE _) t) = do
+infer' g e1@(AnnE e@(VarE _) t) = do
   -- This is a bit questionable. If a single variable is annotated, e.g.
   -- `x::Int`, and is not declared, this would normally raise an
   -- UnboundVariable error. However, it is convenient for testing purposes, and
@@ -402,13 +410,13 @@ infer g e1@(AnnE e@(VarE _) t) = do
   case lookupE e g of
     (Just _) -> check g e t
     Nothing -> return (g, t, e1)
-infer g (AnnE e t) = check g e t
+infer' g (AnnE e t) = check g e t
 
-infer g e1@(ListE []) = do
+infer' g e1@(ListE []) = do
   t <- newvar
   let t' = ArrT (TV "List") [t]
   return (g +> t, t', ann e1 t')
-infer g e1@(ListE (x:xs)) = do 
+infer' g e1@(ListE (x:xs)) = do 
   (g', t', _) <- infer g x
   g'' <- checkAll g' xs t'
   let t'' = ArrT (TV "List") [t']
@@ -419,9 +427,9 @@ infer g e1@(ListE (x:xs)) = do
     checkAll g (e:es) t = do
       (g', _, _) <- check g e t
       checkAll g' es t
-infer g (TupleE []) = error "Illegal tuple (length must be greater than 1)"
-infer g (TupleE [x]) = error "Illegal tuple (length must be greater than 1)"
-infer g (TupleE xs) = do
+infer' g (TupleE []) = error "Illegal tuple (length must be greater than 1)"
+infer' g (TupleE [x]) = error "Illegal tuple (length must be greater than 1)"
+infer' g (TupleE xs) = do
   (g', ts, es) <- inferAll g (reverse xs) [] []
   let v = TV . T.pack $ "Tuple" ++ (show (length xs))
       t = ArrT v ts
@@ -444,16 +452,19 @@ check
     , Type -- The inferred type of the expression
     , Expr -- The annotated expression
   )
+check g e t = do
+  -- traceM ("c> " ++ desc e ++ " | " ++ desc t)
+  check' g e t
 --
 -- ----------------------------------------- 1l
 --  g |- () <= 1 -| g
-check g UniE UniT = return (g, UniT, ann UniE UniT)
+check' g UniE UniT = return (g, UniT, ann UniE UniT)
 -- 1l-error
-check _ _ UniT = throwError TypeMismatch
+check' _ _ UniT = throwError TypeMismatch
 --  g1,x:A |- e <= B -| g2,x:A,g3
 -- ----------------------------------------- -->I
 --  g1 |- \x.e <= A -> B -| g2
-check g (LamE v e) (FunT a b) = do
+check' g (LamE v e) (FunT a b) = do
   -- define x:A
   let anng = AnnG (VarE v) a
   -- check that e has the expected output type
@@ -465,7 +476,7 @@ check g (LamE v e) (FunT a b) = do
 --  g1,x |- e <= A -| g2,x,g3
 -- ----------------------------------------- Forall.I
 --  g1 |- e <= Forall x.A -| g2
-check g1 e r2@(Forall x a) = do
+check' g1 e r2@(Forall x a) = do
   (g', _, e') <- check (g1 +> VarG x) e a
   g2 <- cut (VarG x) g'
   let t'' = apply g2 r2
@@ -474,7 +485,7 @@ check g1 e r2@(Forall x a) = do
 --  g2 |- [g2]A <: [g2]B -| g3
 -- ----------------------------------------- Sub
 --  g1 |- e <= B -| g3
-check g1 e b = do
+check' g1 e b = do
   (g2, a, e') <- infer g1 e
   g3 <- subtype (apply g2 a) (apply g2 b) g2
   let a' = apply g3 a
@@ -489,26 +500,33 @@ derive
       , Type -- @b@, the function output type after context application
       , Expr -- @e@, with type annotation
   )
+derive g e t = do
+  -- traceM ("a> " ++ desc e ++ " | " ++ desc t)
+  derive' g e t
 --  g1 |- e <= A -| g2
 -- ----------------------------------------- -->App
 --  g1 |- A->C o e =>> C -| g2
-derive g e (FunT a b) = do
+derive' g e t@(FunT a b) = do
   (g', _, e') <- check g e a
   return (g', apply g' b, e')
 
 --  g1,Ea |- [Ea/a]A o e =>> C -| g2
 -- ----------------------------------------- Forall App
 --  g1 |- Forall x.A o e =>> C -| g2
-derive g e (Forall x s) = derive (g +> ExistG x) e (substitute x s)
+derive' g e (Forall x s) = derive (g +> ExistG x) e (substitute x s)
 
 --  g1[Ea2, Ea1, Ea=Ea1->Ea2] |- e <= Ea1 -| g2
 -- ----------------------------------------- EaApp
 --  g1[Ea] |- Ea o e =>> Ea2 -| g2
-derive g e (ExistT v) = do
-  a <- newvar
-  b <- newvar
-  let g' = g +> a +> b +> SolvedG v (FunT a b)
-  (g'', _, e') <- check g' e a
-  return (g'', apply g'' b, applyE g'' e')
+derive' g e t@(ExistT v) = do
+  ea1 <- newvar
+  ea2 <- newvar
+  let t' = FunT ea1 ea2
+  g2 <- case access1 t g of 
+    -- replace <t0> with <t0>:<ea1> -> <ea2>
+    Just (rs, _, ls) -> return $ rs ++ [SolvedG v t', index ea1, index ea2] ++ ls
+    Nothing -> throwError UnknownError
+  (g3, _, e2) <- check g2 e ea1
+  return (g3, apply g3 ea2, e2)
 
-derive _ _ _ = throwError NonFunctionDerive
+derive' _ _ _ = throwError NonFunctionDerive
