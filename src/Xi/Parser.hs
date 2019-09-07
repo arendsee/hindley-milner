@@ -87,15 +87,31 @@ pTuple = do
 
 pStatement :: Parser Expr
 pStatement = try pDeclaration <|> pSignature
- 
+
 pDeclaration :: Parser Expr
-pDeclaration = do
+pDeclaration = try pFunctionDeclaration <|> pDataDeclaration
+ 
+pDataDeclaration :: Parser Expr
+pDataDeclaration = do
   v <- name
   _ <- symbol "="
   e1 <- pNonStatementExpr
   _ <- symbol ";"
   e2 <- pExpr
   return (Declaration (EV v) e1 e2)
+
+pFunctionDeclaration :: Parser Expr
+pFunctionDeclaration = do
+  v <- name
+  args <- many1 name
+  _ <- symbol "="
+  e1 <- pNonStatementExpr
+  _ <- symbol ";"
+  e2 <- pExpr
+  return $ Declaration (EV v) (curryLamE (map EV args) e1) e2
+  where
+    curryLamE [] e' = e'
+    curryLamE (v:vs') e' = LamE v (curryLamE vs' e') 
 
 pSignature :: Parser Expr
 pSignature = do
