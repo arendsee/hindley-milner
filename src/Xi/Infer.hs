@@ -434,7 +434,7 @@ infer' g (TupleE xs) = do
   let v = TV . T.pack $ "Tuple" ++ (show (length xs))
       t = ArrT v ts
       e = TupleE es
-  return (g, t, AnnE e t)
+  return (g', t, AnnE e t)
   where
     inferAll :: Gamma -> [Expr] -> [Type] -> [Expr] -> Stack (Gamma, [Type], [Expr])
     inferAll g [] ts es = return (g, ts, es)
