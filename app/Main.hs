@@ -3,6 +3,7 @@
 module Main where
 
 import Xi
+import Xi.Parser (readType)
 
 import System.Console.Docopt
 import qualified System.Environment as SE
@@ -17,8 +18,9 @@ getArgOrExit = getArgOrExitWith template
 main :: IO ()
 main = do
   args <- parseArgsOrExit template =<< SE.getArgs
-  let verbosityStr = getArgWithDefault args "1" (longOption "verbosity")
   expr <- fmap pack $ getArgOrExit args (argument "expression")
-  case (reads verbosityStr :: [(Int, String)]) of
-    [(verbosity, "")] -> typecheckText verbosity expr
-    _ -> error "Expected verbosity argument to be an integer"
+  if isPresent args (longOption "type")
+  then
+    print $ readType expr
+  else
+    typecheckText expr

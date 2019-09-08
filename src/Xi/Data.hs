@@ -25,8 +25,6 @@ module Xi.Data
   -- * State manipulation
   , newvar
   , newqul
-  -- * Config handling
-  , verbosity
   -- * pretty printing
   , prettyExpr
   , prettyType
@@ -52,15 +50,15 @@ type Stack a = GeneralStack StackConfig TypeError [T.Text] StackState a
 
 -- | currently I do nothing with the Reader and Writer monads, but I'm leaving
 -- them in for now since I will need them when I plug this all into Morloc.
-runStack :: Stack a -> Int -> (Either TypeError a, [T.Text])
-runStack e verbosity'
+runStack :: Stack a -> (Either TypeError a, [T.Text])
+runStack e
   = fst
   . MI.runIdentity
   . flip MS.runStateT emptyState
   . MW.runWriterT
   . ME.runExceptT
   . MR.runReaderT e
-  $ StackConfig verbosity'
+  $ StackConfig 0
          
 
 type Gamma = [GammaIndex]
@@ -74,11 +72,8 @@ data StackState = StackState {
 emptyState = StackState 0 0
 
 data StackConfig = StackConfig {
-      configVerbosity :: Int 
+      configVerbosity :: Int -- Not currently used
   }
-
-verbosity :: Stack Int
-verbosity = MR.asks configVerbosity
 
 -- | A context, see Dunfield Figure 6
 data GammaIndex

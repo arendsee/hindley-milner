@@ -22,27 +22,27 @@ typeof es = typeof' . head . reverse $ es where
 exprTestGood :: Text -> Type -> TestTree
 exprTestGood e t
   = testCase (unpack e)
-  $ case runStack (typecheck (readProgram e)) 0 of
+  $ case runStack (typecheck (readProgram e)) of
       (Right es', _) -> assertEqual "" t (typeof es')
       (Left err, _) -> error (show err)
 
 exprTestFull :: Text -> Text -> TestTree
 exprTestFull code expCode
   = testCase (unpack code)
-  $ case runStack (typecheck (readProgram code)) 0 of
+  $ case runStack (typecheck (readProgram code)) of
       (Right e, _) -> assertEqual "" e (readProgram expCode) 
       (Left err, _) -> error (show err)
 
 exprTestBad :: Text -> TestTree
 exprTestBad e
   = testCase ("Fails?: " <> unpack e)
-  $ case runStack (typecheck (readProgram e)) 0 of
+  $ case runStack (typecheck (readProgram e)) of
       (Right _, _) -> assertFailure . unpack $ "Expected '" <> e <> "' to fail"
       (Left _, _) -> return ()
 
 expectError :: Text -> TypeError -> TestTree
 expectError expr err = testCase ("Fails?: " <> unpack expr)
-  $ case runStack (typecheck (readProgram expr)) 0 of
+  $ case runStack (typecheck (readProgram expr)) of
       (Right _, _) -> assertFailure . unpack $ "Expected failure"
       (Left err, _) -> return ()
       (Left err', _) -> assertFailure

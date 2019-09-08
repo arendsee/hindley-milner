@@ -78,12 +78,12 @@ typeSize (ArrT _ xs) = 1 + sum (map typeSize xs)
 
 subtypeOf :: Type -> Type -> Gamma -> Bool
 subtypeOf t1 t2 g =
-  case runStack (subtype t1 t2 g) 0 of
+  case runStack (subtype t1 t2 g) of
     (Right _, _) -> True
     (Left _, _) -> False
 
 -- infer1 :: [Expr] -> Bool
--- infer1 es = case runStack (typecheck es) 0 of
+-- infer1 es = case runStack (typecheck es) of
 --   (Right (g, t, es'), _) -> all (infer1' t) es'
 --   (Left e, _) -> False
 --   where
@@ -94,12 +94,12 @@ subtypeOf t1 t2 g =
 --       Nothing -> False
 --
 -- infer2 :: [Expr] -> Bool
--- infer2 es = case runStack (typecheck es) 0 of
+-- infer2 es = case runStack (typecheck es) of
 --   (Right (g, t, es'), _) -> unannotate es == unannotate es'
 --   (Left _, _) -> False
 --
 -- renameTest :: [Expr] -> Bool
--- renameTest es = case runStack (mapM renameExpr es) 0 of
+-- renameTest es = case runStack (mapM renameExpr es) of
 --   (Right es', _) -> map unrenameExpr es' == es
 --   (Left _, _) -> False
 
