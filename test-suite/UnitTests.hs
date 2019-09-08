@@ -12,37 +12,37 @@ import Test.Tasty.HUnit
 import Data.Text (unpack, pack, Text)
 
 -- get the toplevel type of a fully annotated expression
-typeof :: Expr -> Type
-typeof (Declaration _ _ e) = typeof e
-typeof (Signature _ _ e) = typeof e
-typeof (AnnE _ t) = t
-typeof (AppE _ t) = typeof t
-typeof t = error ("No annotation found for: " <> show t)
+typeof :: [Expr] -> Type
+typeof es = typeof' . head . reverse $ es where
+  typeof' (Signature _ t) = t
+  typeof' (AnnE _ t) = t
+  typeof' (AppE _ t) = typeof' t
+  typeof' t = error ("No annotation found for: " <> show t)
 
 exprTestGood :: Text -> Type -> TestTree
 exprTestGood e t
   = testCase (unpack e)
-  $ case runStack (typecheck (readExpr e)) 0 of
-      (Right e', _) -> assertEqual "" t (typeof e')
+  $ case runStack (typecheck (readProgram e)) 0 of
+      (Right es', _) -> assertEqual "" t (typeof es')
       (Left err, _) -> error (show err)
 
 exprTestFull :: Text -> Text -> TestTree
 exprTestFull code expCode
   = testCase (unpack code)
-  $ case runStack (typecheck (readExpr code)) 0 of
-      (Right e, _) -> assertEqual "" e (readExpr expCode) 
+  $ case runStack (typecheck (readProgram code)) 0 of
+      (Right e, _) -> assertEqual "" e (readProgram expCode) 
       (Left err, _) -> error (show err)
 
 exprTestBad :: Text -> TestTree
 exprTestBad e
   = testCase ("Fails?: " <> unpack e)
-  $ case runStack (typecheck (readExpr e)) 0 of
+  $ case runStack (typecheck (readProgram e)) 0 of
       (Right _, _) -> assertFailure . unpack $ "Expected '" <> e <> "' to fail"
       (Left _, _) -> return ()
 
 expectError :: Text -> TypeError -> TestTree
 expectError expr err = testCase ("Fails?: " <> unpack expr)
-  $ case runStack (typecheck (readExpr expr)) 0 of
+  $ case runStack (typecheck (readProgram expr)) 0 of
       (Right _, _) -> assertFailure . unpack $ "Expected failure"
       (Left err, _) -> return ()
       (Left err', _) -> assertFailure
@@ -104,6 +104,12 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "[]" (forall ["a"] (lst (var "a")))
     , exprTestGood "f :: [Int] -> Bool; f [1]" bool
     , exprTestGood "f :: forall a . [a] -> Bool; f [1]" bool
+    -- * adding signatures to declarations
+    , exprTestGood "f :: forall a . a -> a; f x = x; f 42" int
+    , exprTestGood "f :: Int -> Bool; f x = True; f 42" bool
+    , exprTestGood "f :: Int -> Bool; f x = True; f" (fun [int, bool])
+    , expectError  "f :: Int -> Bool; f x = 9999"
+                   (SubtypeError int bool)
     -- * higher order functions
     , exprTestGood "map :: forall a b . (a->b) -> [a] -> [b]; f :: Int -> Bool; map f [5,2]" (lst bool)
     , exprTestGood "f = \\x -> (14,x); g = \\x f -> f x; g True f" (tuple [int, bool])

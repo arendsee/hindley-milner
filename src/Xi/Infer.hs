@@ -18,14 +18,22 @@ import Xi.Data
 import Control.Monad (replicateM)
 import qualified Data.Text as T
 import qualified Data.Set as Set
+import qualified Data.List as L
 
 -- import Debug.Trace
 
-typecheck :: Expr -> Stack Expr
+typecheck :: [Expr] -> Stack [Expr]
 typecheck e = do
-  e' <- renameExpr e
-  (g, t, e'') <- infer [] e'
-  return $ generalizeE (unrenameExpr e'')
+  es <- fmap L.sort (mapM renameExpr e)
+  -- traceShowM es
+  (g, es') <- typecheck' [] [] es 
+  return $ map (generalizeE . unrenameExpr . applyE g) (reverse es')
+
+typecheck' :: Gamma -> [Expr] -> [Expr] -> Stack (Gamma, [Expr])
+typecheck' g es [] = return (g, es)
+typecheck' g es (x:xs) = do
+  (g', _, e') <- infer g x
+  typecheck' g' (e':es) xs
 
 renameExpr :: Expr -> Stack Expr
 renameExpr (LamE v e) = LamE <$> pure v <*> renameExpr e
@@ -33,8 +41,8 @@ renameExpr (ListE es) = ListE <$> mapM renameExpr es
 renameExpr (TupleE es) = TupleE <$> mapM renameExpr es
 renameExpr (AppE e1 e2) = AppE <$> renameExpr e1 <*> renameExpr e2
 renameExpr (AnnE e t) = AnnE <$> renameExpr e <*> renameType t
-renameExpr (Declaration v e1 e2) = Declaration <$> pure v <*> renameExpr e1 <*> renameExpr e2
-renameExpr (Signature v t e) = Signature <$> pure v <*> renameType t <*> renameExpr e
+renameExpr (Declaration v e) = Declaration <$> pure v <*> renameExpr e
+renameExpr (Signature v t) = Signature <$> pure v <*> renameType t
 renameExpr e = return e
 
 renameType :: Type -> Stack Type
@@ -54,8 +62,8 @@ unrenameExpr (ListE es) = ListE (map unrenameExpr es)
 unrenameExpr (TupleE es) = TupleE (map unrenameExpr es)
 unrenameExpr (AppE e1 e2) = AppE (unrenameExpr e1) (unrenameExpr e2)
 unrenameExpr (AnnE e t) = AnnE (unrenameExpr e) (unrenameType t)
-unrenameExpr (Declaration v e1 e2) = Declaration v (unrenameExpr e1) (unrenameExpr e2)
-unrenameExpr (Signature v t e) = Signature v (unrenameType t) (unrenameExpr e)
+unrenameExpr (Declaration v e) = Declaration v (unrenameExpr e)
+unrenameExpr (Signature v t) = Signature v (unrenameType t)
 unrenameExpr e = e
 
 unrename :: TVar -> TVar
@@ -112,8 +120,8 @@ applyE g (TupleE xs) = TupleE (map (applyE g) xs)
 applyE g (LamE v e) = LamE v (applyE g e)
 applyE g (AppE e1 e2) = AppE (applyE g e1) (applyE g e2)
 applyE g (AnnE e t) = ann (applyE g e) (apply g t)
-applyE g (Declaration v e1 e2) = Declaration v (applyE g e1) (applyE g e2)
-applyE g (Signature v t e) = Signature v (apply g t) (applyE g e)
+applyE g (Declaration v e) = Declaration v (applyE g e)
+applyE g (Signature v t) = Signature v (apply g t)
 applyE _ e@(VarE _) = e
 applyE _ e@(IntE _) = e
 applyE _ e@(NumE _) = e
@@ -133,13 +141,6 @@ free v@(ExistT _) = Set.singleton v
 free (FunT t1 t2) = Set.union (free t1) (free t2)
 free (Forall v t) = Set.delete (VarT v) (free t)
 free (ArrT _ xs) = Set.unions (map free xs)
-
-occursCheckExpr :: Gamma -> EVar -> Stack ()
-occursCheckExpr [] _ = return ()
-occursCheckExpr ((AnnG (VarE v') _):gs) v
-  | v' == v = throwError ToplevelRedefinition
-  | otherwise = occursCheckExpr gs v
-occursCheckExpr _ _ = return ()
 
 -- | type 1 is more polymorphic than type 2 (Dunfield Figure 9)
 subtype :: Type -> Type -> Gamma -> Stack Gamma
@@ -352,15 +353,18 @@ infer' g e@(StrE _) = return (g, t, ann e t) where
 infer' g e@(LogE _) = return (g, t, ann e t) where
   t = VarT (TV "Bool")
 -- Declaration=>
-infer' g (Declaration v e1 e2) = do
-  occursCheckExpr g v
-  (_, t1', e1') <- infer g e1
-  (g'', t2', e2') <- infer (g +> AnnG (VarE v) (generalize t1')) e2
-  return (g'', t2', Declaration v (generalizeE e1') e2')
+infer' g (Declaration v e) = do
+  (g2, t1, e2) <- infer (g +> MarkEG v) e
+  g3 <- cut (MarkEG v) g2
+  (g4, t2, e3) <- case lookupE (VarE v) g of
+    (Just t) -> check g2 e2 t
+    Nothing -> return (g3, t1, e2)
+  let t3 = generalize t2
+      g5 = g4 +> AnnG (VarE v) t3
+  return (g5, t3, Declaration v (generalizeE e3))
 -- Signature=>
-infer' g (Signature v t e2) = do
-  (g', t', e2') <- infer (g +> AnnG (VarE v) t) e2
-  return $ (g', t', Signature v t e2')
+infer' g (Signature v t) = return (g +> AnnG (VarE v) t , t, Signature v t)
+
 
 --  (x:A) in g
 -- ------------------------------------------- Var

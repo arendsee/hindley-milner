@@ -1,4 +1,4 @@
-module Xi.Parser (readExpr, readType) where
+module Xi.Parser (readProgram, readType) where
 
 import Xi.Data
 import Text.Megaparsec
@@ -45,10 +45,44 @@ name = lexeme $ do
   rs <- many C.alphaNumChar
   return (T.pack $ f:rs)
 
-readExpr :: T.Text -> Expr
-readExpr s = case parse (pExpr <* eof) "" s of 
+readProgram :: T.Text -> [Expr]
+readProgram s = case parse (pProgram <* eof) "" s of 
   Left err -> error (show err)
-  Right expr -> expr
+  Right es -> es
+
+pProgram :: Parser [Expr]
+pProgram = sepBy (try pStatement <|> pExpr) (symbol ";")
+
+pStatement :: Parser Expr
+pStatement = try pDeclaration <|> pSignature
+
+pDeclaration :: Parser Expr
+pDeclaration = try pFunctionDeclaration <|> pDataDeclaration
+ 
+pDataDeclaration :: Parser Expr
+pDataDeclaration = do
+  v <- name
+  _ <- symbol "="
+  e <- pExpr
+  return (Declaration (EV v) e)
+
+pFunctionDeclaration :: Parser Expr
+pFunctionDeclaration = do
+  v <- name
+  args <- many1 name
+  _ <- symbol "="
+  e <- pExpr
+  return $ Declaration (EV v) (curryLamE (map EV args) e)
+  where
+    curryLamE [] e' = e'
+    curryLamE (v:vs') e' = LamE v (curryLamE vs' e') 
+
+pSignature :: Parser Expr
+pSignature = do
+  v <- name
+  _ <- symbol "::"
+  t <- pType
+  return (Signature (EV v) t)
 
 readType :: T.Text -> Type
 readType s = case parse (pType <* eof) "" s of 
@@ -56,10 +90,7 @@ readType s = case parse (pType <* eof) "" s of
   Right t -> t 
 
 pExpr :: Parser Expr
-pExpr = try pStatement <|> pNonStatementExpr
-
-pNonStatementExpr :: Parser Expr
-pNonStatementExpr
+pExpr
   =   try pTuple
   <|> try pUni
   <|> try pAnn
@@ -74,53 +105,16 @@ pNonStatementExpr
   <|> pVar
 
 pListE :: Parser Expr
-pListE = fmap ListE $ brackets (sepBy pNonStatementExpr (symbol ","))
+pListE = fmap ListE $ brackets (sepBy pExpr (symbol ","))
 
 pTuple :: Parser Expr
 pTuple = do
   _ <- symbol "("
-  e <- pNonStatementExpr
+  e <- pExpr
   _ <- symbol ","
-  es <- sepBy1 pNonStatementExpr (symbol ",")
+  es <- sepBy1 pExpr (symbol ",")
   _ <- symbol ")"
   return (TupleE (e:es))
-
-pStatement :: Parser Expr
-pStatement = try pDeclaration <|> pSignature
-
-pDeclaration :: Parser Expr
-pDeclaration = try pFunctionDeclaration <|> pDataDeclaration
- 
-pDataDeclaration :: Parser Expr
-pDataDeclaration = do
-  v <- name
-  _ <- symbol "="
-  e1 <- pNonStatementExpr
-  _ <- symbol ";"
-  e2 <- pExpr
-  return (Declaration (EV v) e1 e2)
-
-pFunctionDeclaration :: Parser Expr
-pFunctionDeclaration = do
-  v <- name
-  args <- many1 name
-  _ <- symbol "="
-  e1 <- pNonStatementExpr
-  _ <- symbol ";"
-  e2 <- pExpr
-  return $ Declaration (EV v) (curryLamE (map EV args) e1) e2
-  where
-    curryLamE [] e' = e'
-    curryLamE (v:vs') e' = LamE v (curryLamE vs' e') 
-
-pSignature :: Parser Expr
-pSignature = do
-  v <- name
-  _ <- symbol "::"
-  t <- pType
-  _ <- symbol ";"
-  e2 <- pExpr
-  return (Signature (EV v) t e2)
 
 pUni :: Parser Expr
 pUni = symbol "UNIT" >> return UniE

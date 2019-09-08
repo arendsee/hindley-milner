@@ -91,11 +91,16 @@ data GammaIndex
   -- ^ (G,a^=t) Store a solved existential variable
   | MarkG TVar
   -- ^ (G,>a^) Store a type variable marker bound under a forall
+  | MarkEG EVar
   deriving(Ord, Eq, Show)
 
 -- | Terms, see Dunfield Figure 1
 data Expr
-  = UniE
+  = Signature EVar Type
+  -- ^ x :: A; e
+  | Declaration EVar Expr
+  -- ^ x=e1; e2
+  | UniE
   -- ^ (())
   | VarE EVar 
   -- ^ (x)
@@ -111,10 +116,6 @@ data Expr
   -- ^ (e : A)
   | IntE Integer | NumE Double | LogE Bool | StrE T.Text 
   -- ^ primitives
-  | Declaration EVar Expr Expr
-  -- ^ x=e1; e2
-  | Signature EVar Type Expr
-  -- ^ x :: A; e
   deriving(Show, Ord, Eq)
 
 -- | Types, see Dunfield Figure 6
@@ -195,8 +196,8 @@ access2 lgi rgi gs
 
 ann :: Expr -> Type -> Expr
 ann (AnnE e _) t = AnnE e t 
-ann e@(Declaration _ _ _) _ = e
-ann e@(Signature _ _ _) _ = e
+ann e@(Declaration _ _) _ = e
+ann e@(Signature _ _) _ = e
 ann e t = AnnE e t
 
 generalize :: Type -> Type
@@ -239,8 +240,8 @@ generalizeE (TupleE xs) = TupleE (map generalizeE xs)
 generalizeE (LamE v e) = LamE v (generalizeE e)
 generalizeE (AppE e1 e2) = AppE (generalizeE e1) (generalizeE e2)
 generalizeE (AnnE e t) = ann (generalizeE e) (generalize t)
-generalizeE (Declaration v e1 e2) = Declaration v (generalizeE e1) (generalizeE e2)
-generalizeE (Signature v t e) = Signature v (generalize t) (generalizeE e)
+generalizeE (Declaration v e) = Declaration v (generalizeE e)
+generalizeE (Signature v t) = Signature v (generalize t)
 generalizeE e = e
 
 newvar :: Stack Type
@@ -293,8 +294,8 @@ prettyExpr (IntE x) = pretty x
 prettyExpr (NumE x) = pretty x
 prettyExpr (StrE x) = dquotes (pretty x)
 prettyExpr (LogE x) = pretty x
-prettyExpr (Declaration (EV v) e1 e2) = pretty v <+> "=" <+> prettyExpr e1 <> line <> prettyExpr e2
-prettyExpr (Signature (EV v) t e2) = pretty v <+> "::" <+> prettyGreenType t <> line <> prettyExpr e2
+prettyExpr (Declaration (EV v) e) = pretty v <+> "=" <+> prettyExpr e
+prettyExpr (Signature (EV v) t) = pretty v <+> "::" <+> prettyGreenType t
 prettyExpr (ListE xs) = list (map prettyExpr xs)
 prettyExpr (TupleE xs) = tupled (map prettyExpr xs)
 
@@ -328,18 +329,18 @@ instance Describable Expr where
   desc (TupleE _) = "Tuple"
   desc (LamE (EV v) _) = "LamE:" ++ T.unpack v
   desc (AppE e1 e2) = "AppE (" ++ desc e1 ++ ") (" ++ desc e2 ++ ")"
-  desc (AnnE e t) = "AnnE (" ++ desc e ++ ")"
+  desc (AnnE e _) = "AnnE (" ++ desc e ++ ")"
   desc (IntE x) = "IntE:" ++ show x
   desc (NumE x) = "NumE:" ++ show x
   desc (LogE x) = "LogE:" ++ show x
   desc (StrE x) = "StrE:" ++ show x
-  desc (Declaration (EV e) _ _) = "Declaration:" ++ T.unpack e
-  desc (Signature (EV e) _ _) = "Signature:" ++ T.unpack e
+  desc (Declaration (EV e) _) = "Declaration:" ++ T.unpack e
+  desc (Signature (EV e) _) = "Signature:" ++ T.unpack e
 
 instance Describable Type where
   desc (UniT) = "UniT"
   desc (VarT (TV v)) = "VarT:" ++ T.unpack v
   desc (ExistT (TV v)) = "ExistT:" ++ T.unpack v
-  desc (Forall (TV v) t) = "Forall:" ++ T.unpack v
+  desc (Forall (TV v) _) = "Forall:" ++ T.unpack v
   desc (FunT t1 t2) = "FunT (" ++ desc t1 ++ ") (" ++ desc t2 ++ ")"
   desc (ArrT (TV v) xs) = "ArrT:" ++ T.unpack v ++ " " ++ (concat . map desc) xs
