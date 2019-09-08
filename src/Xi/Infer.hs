@@ -36,14 +36,7 @@ typecheck' g es (x:xs) = do
   typecheck' g' (e':es) xs
 
 renameExpr :: Expr -> Stack Expr
-renameExpr (LamE v e) = LamE <$> pure v <*> renameExpr e
-renameExpr (ListE es) = ListE <$> mapM renameExpr es
-renameExpr (TupleE es) = TupleE <$> mapM renameExpr es
-renameExpr (AppE e1 e2) = AppE <$> renameExpr e1 <*> renameExpr e2
-renameExpr (AnnE e t) = AnnE <$> renameExpr e <*> renameType t
-renameExpr (Declaration v e) = Declaration <$> pure v <*> renameExpr e
-renameExpr (Signature v t) = Signature <$> pure v <*> renameType t
-renameExpr e = return e
+renameExpr = mapT' renameType
 
 renameType :: Type -> Stack Type
 renameType UniT = return UniT 
@@ -57,14 +50,7 @@ renameType (FunT t1 t2) = FunT <$> renameType t1 <*> renameType t2
 renameType (ArrT v ts) = ArrT <$> pure v <*> mapM renameType ts
 
 unrenameExpr :: Expr -> Expr
-unrenameExpr (LamE v e) = LamE v (unrenameExpr e)
-unrenameExpr (ListE es) = ListE (map unrenameExpr es)
-unrenameExpr (TupleE es) = TupleE (map unrenameExpr es)
-unrenameExpr (AppE e1 e2) = AppE (unrenameExpr e1) (unrenameExpr e2)
-unrenameExpr (AnnE e t) = AnnE (unrenameExpr e) (unrenameType t)
-unrenameExpr (Declaration v e) = Declaration v (unrenameExpr e)
-unrenameExpr (Signature v t) = Signature v (unrenameType t)
-unrenameExpr e = e
+unrenameExpr = mapT unrenameType
 
 unrename :: TVar -> TVar
 unrename (TV t) = TV . head $ T.splitOn "." t
@@ -115,19 +101,7 @@ apply g a@(ExistT v) = case lookupT v g of
 apply g (ArrT v ts) = ArrT v (map (apply g) ts) 
 
 applyE :: Gamma -> Expr -> Expr
-applyE g (ListE xs) = ListE (map (applyE g) xs)
-applyE g (TupleE xs) = TupleE (map (applyE g) xs)
-applyE g (LamE v e) = LamE v (applyE g e)
-applyE g (AppE e1 e2) = AppE (applyE g e1) (applyE g e2)
-applyE g (AnnE e t) = ann (applyE g e) (apply g t)
-applyE g (Declaration v e) = Declaration v (applyE g e)
-applyE g (Signature v t) = Signature v (apply g t)
-applyE _ e@(VarE _) = e
-applyE _ e@(IntE _) = e
-applyE _ e@(NumE _) = e
-applyE _ e@(StrE _) = e
-applyE _ e@(LogE _) = e
-applyE _ UniE = UniE
+applyE g e = mapT (apply g) e
 
 occursCheck :: Type -> Type -> Stack()
 occursCheck t1 t2 = case Set.member t1 (free t2) of

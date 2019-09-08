@@ -18,9 +18,10 @@ module Xi.Data
   , throwError
   , runStack
   , index
-  --
   , generalize
   , generalizeE
+  , mapT
+  , mapT'
   -- * State manipulation
   , newvar
   , newqul
@@ -152,6 +153,26 @@ data TypeError
   | OtherError T.Text
   deriving(Show, Ord, Eq)
 
+mapT :: (Type -> Type) -> Expr -> Expr
+mapT f (LamE v e) = LamE v (mapT f e)
+mapT f (ListE es) = ListE (map (mapT f) es)
+mapT f (TupleE es) = TupleE (map (mapT f) es)
+mapT f (AppE e1 e2) = AppE (mapT f e1) (mapT f e2)
+mapT f (AnnE e t) = AnnE (mapT f e) (f t)
+mapT f (Declaration v e) = Declaration v (mapT f e)
+mapT f (Signature v t) = Signature v (f t)
+mapT _ e = e
+
+mapT' :: Monad m => (Type -> m Type) -> Expr -> m Expr
+mapT' f (LamE v e) = LamE <$> pure v <*> mapT' f e
+mapT' f (ListE es) = ListE <$> mapM (mapT' f) es
+mapT' f (TupleE es) = TupleE <$> mapM (mapT' f) es
+mapT' f (AppE e1 e2) = AppE <$> mapT' f e1 <*> mapT' f e2
+mapT' f (AnnE e t) = AnnE <$> mapT' f e <*> f t
+mapT' f (Declaration v e) = Declaration <$> pure v <*> mapT' f e
+mapT' f (Signature v t) = Signature <$> pure v <*> f t
+mapT' _ e = return e
+
 (+>) :: Indexable a => Gamma -> a -> Gamma
 (+>) xs x = (index x):xs
 
@@ -235,14 +256,7 @@ generalize t = generalize' existentialMap t where
     f _ t1 = t1
 
 generalizeE :: Expr -> Expr
-generalizeE (ListE xs) = ListE (map generalizeE xs)
-generalizeE (TupleE xs) = TupleE (map generalizeE xs)
-generalizeE (LamE v e) = LamE v (generalizeE e)
-generalizeE (AppE e1 e2) = AppE (generalizeE e1) (generalizeE e2)
-generalizeE (AnnE e t) = ann (generalizeE e) (generalize t)
-generalizeE (Declaration v e) = Declaration v (generalizeE e)
-generalizeE (Signature v t) = Signature v (generalize t)
-generalizeE e = e
+generalizeE = mapT generalize
 
 newvar :: Stack Type
 newvar = do
