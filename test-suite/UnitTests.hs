@@ -20,7 +20,8 @@ main (m:ms)
 -- get the toplevel type of a fully annotated expression
 typeof :: [Expr] -> Type
 typeof es = typeof' . head . reverse $ es where
-  typeof' (Signature _ t) = t
+  typeof' (Signature _ (Just t) _) = t
+  typeof' t@(Signature _ Nothing _) = error $ "No general type found for: " <> show t
   typeof' (AnnE _ t) = t
   typeof' (AppE _ t) = typeof' t
   typeof' t = error ("No annotation found for: " <> show t)
@@ -174,24 +175,23 @@ unitTests = testGroup "Unit tests"
         ]
     , (flip expectError) CannotImportMain $ T.unlines
         [ "module Main {export x; x = 42};"
-        , "module Foo {import x}"
+        , "module Foo {import Main (x)}"
         ]
     , (flip expectError) CyclicDependency $ T.unlines
-        [ "module Foo {import Bar y; export x; x = 42};"
-        , "module Bar {import Foo x; export y; y = 88}"
+        [ "module Foo {import Bar (y); export x; x = 42};"
+        , "module Bar {import Foo (x); export y; y = 88}"
         ]
     , (flip expectError) (MultipleModuleDeclarations (MV "Foo")) $ T.unlines
         [ "module Foo {x = 42};"
         , "module Foo {x = 88}"
         ]
     , (flip expectError) (SelfImport (MV "Foo")) $ T.unlines
-        [ "module Foo {import Foo x; x = 42}"
+        [ "module Foo {import Foo (x); x = 42}"
         ]
     , (flip expectError) (BadImport (MV "Foo") (EV "x")) $ T.unlines
         [ "module Foo {x = 42};"
         , "module Main {import Foo (x); x}"
         ]
-
     -- internal ---------------------------------------------------------------
     , exprTestFull "f :: forall a . a -> Bool; f 42"
                    "f :: forall a . a -> Bool; (((f :: Int -> Bool) (42 :: Int)) :: Bool)"

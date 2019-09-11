@@ -6,6 +6,8 @@ import Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as L
 import qualified Data.Text as T
 import Data.Void (Void)
+import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 type Parser = Parsec Void T.Text
 
@@ -42,11 +44,19 @@ braces p = lexeme $ between (symbol "{") (symbol "}") p
 angles :: Parser a -> Parser a
 angles p = lexeme $ between (symbol "<") (symbol ">") p
 
+reservedWords :: [T.Text]
+reservedWords = ["module", "where", "import", "export", "as", "True", "False"]
+
+reserved :: T.Text -> Parser T.Text
+reserved w = try (symbol w)
+
 name :: Parser T.Text
-name = lexeme $ do
-  f <- C.letterChar
-  rs <- many C.alphaNumChar
-  return (T.pack $ f:rs)
+name = (lexeme . try) (p >>= check)
+  where
+    p       = fmap T.pack $ (:) <$> letterChar <*> many (alphaNumChar <|> char '_')
+    check x = if elem x reservedWords
+                then failure Nothing Set.empty -- TODO: error message
+                else return x
 
 readProgram :: T.Text -> [Module]
 readProgram s = case parse (space >> pProgram <* eof) "" s of 
@@ -77,7 +87,7 @@ pToplevel =   try (fmap TModule pModule)
 
 pModule :: Parser Module
 pModule = do
-  _ <- symbol "module"
+  _ <- reserved "module"
   moduleName <- name
   mes <- braces ( sepBy pModuleBody (symbol ";") )
   return $ makeModule (MV moduleName) mes
@@ -105,19 +115,20 @@ pModuleBody
 
 pImport :: Parser ModuleBody
 pImport = do
-  _ <- symbol "import"
-  moduleName <- name
-  functions <- parens (sepBy pImportTerm (symbol ","))
-  return $ Import [(MV moduleName, e, a) | (e, a) <- functions]
+  _ <- reserved "import"
+  n <- name
+  functions <-   parens (sepBy pImportTerm (symbol ","))
+            <|>  fmap (\x -> [(EV x, Nothing)]) name
+  return $ Import [(MV n, e, a) | (e, a) <- functions]
 
 pImportTerm :: Parser (EVar, Maybe EVar)
 pImportTerm = do
   n <- name
-  a <- optional (symbol "as" >> name)
+  a <- optional (reserved "as" >> name)
   return (EV n, fmap EV a)
 
 pExport :: Parser ModuleBody
-pExport = fmap (Export . EV) $ symbol "export" >> name
+pExport = fmap (Export . EV) $ reserved "export" >> name
 
 pStatement :: Parser Expr
 pStatement = try pDeclaration <|> pSignature
@@ -146,9 +157,34 @@ pFunctionDeclaration = do
 pSignature :: Parser Expr
 pSignature = do
   v <- name
+  lang <- optional (name)
   _ <- symbol "::"
+  props <- option [] (try $ sepBy1 pProperty (symbol ",") <* symbol "=>")
   t <- pType
-  return (Signature (EV v) t)
+  constraints <- option [] $ reserved "where" >> parens (sepBy1 pConstraint (symbol ","))
+  case lang of
+    (Just langStr) -> return $ Signature (EV v) Nothing (TypeExtension
+      { properties = []
+      , realizations = Map.fromList [(Lang langStr, (t, props, constraints))]
+      , constraints = []
+      })
+    Nothing -> return $ Signature (EV v) (Just t) (TypeExtension
+      { properties = props
+      , realizations = Map.empty
+      , constraints = constraints
+      })
+
+pProperty :: Parser Property
+pProperty = do 
+  ps <- many1 name
+  case ps of
+    ["pack"] -> return Pack
+    ["unpack"] -> return Unpack
+    ["cast"] -> return Cast
+    _ -> return (GeneralProperty ps)
+
+pConstraint :: Parser Constraint
+pConstraint = fmap (Con . T.pack) (many1 (noneOf [',']))
 
 readType :: T.Text -> Type
 readType s = case parse (pType <* eof) "" s of 
@@ -214,8 +250,8 @@ pIntE = fmap IntE integer
 pLogE :: Parser Expr
 pLogE = pTrue <|> pFalse
   where
-    pTrue = symbol "True" >> return (LogE True)
-    pFalse = symbol "False" >> return (LogE False)
+    pTrue = reserved "True" >> return (LogE True)
+    pFalse = reserved "False" >> return (LogE False)
 
 pStrE :: Parser Expr
 pStrE = do

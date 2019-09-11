@@ -36,6 +36,12 @@ module Xi.Data
   , ModularGamma
   , importFromModularGamma
   , extendModularGamma
+  -- * Type extensions
+  , Property(..)
+  , Constraint(..)
+  , Language(..)
+  , TypeExtension(..)
+  , emptyTypeExtension
 ) where
 
 import qualified Data.List as DL
@@ -52,8 +58,6 @@ import qualified Data.Map as Map
 import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.Terminal
 import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
-
-data Dag a = Node a [Dag a] deriving(Show, Eq, Ord)
 
 type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s MI.Identity))) a
 type Stack a = GeneralStack StackConfig TypeError [T.Text] StackState a
@@ -110,7 +114,7 @@ data Module = Module {
 
 -- | Terms, see Dunfield Figure 1
 data Expr
-  = Signature EVar Type
+  = Signature EVar (Maybe Type) TypeExtension
   -- ^ x :: A; e
   | Declaration EVar Expr
   -- ^ x=e1; e2
@@ -148,6 +152,35 @@ data Type
   -- ^ f [Type]
   deriving(Show, Ord, Eq)
 
+data Property
+  = Pack   -- data structure to JSON
+  | Unpack -- JSON to data structure
+  | Cast   -- casts from type A to B
+  | GeneralProperty [T.Text]
+  deriving(Show, Eq, Ord)
+
+-- | Eventually, Constraint should be a richer type, but for they are left as
+-- unparsed lines of text
+newtype Constraint = Con T.Text deriving(Show, Eq, Ord)
+
+-- | Eventually Lang should be an enumeration with a term for each supported
+-- language (as it is in Morloc). But until Xi is connected with Morloc, I will
+-- leave it as general text.
+newtype Language = Lang T.Text deriving(Show, Eq, Ord)
+
+data TypeExtension = TypeExtension {
+    properties :: [Property]
+  , realizations :: Map.Map Language (Type, [Property], [Constraint])
+  , constraints :: [Constraint]
+} deriving(Show, Eq, Ord)
+
+emptyTypeExtension :: TypeExtension
+emptyTypeExtension = TypeExtension {
+    properties = []
+  , realizations = Map.empty
+  , constraints = []
+}
+
 data TypeError
   = UnknownError
   | SubtypeError Type Type
@@ -161,8 +194,9 @@ data TypeError
   | TypeMismatch
   | UnexpectedPattern Expr Type
   | ToplevelRedefinition
-  | UnkindJackass
-  | NoAnnotationFound
+  | UnkindJackass -- this shouldn't be used at all
+  | NoAnnotationFound -- I don't know what this is for
+  | NotImplemented -- this should only be used as a placeholder
   | OtherError T.Text
   -- module errors
   | MultipleModuleDeclarations MVar
@@ -171,6 +205,11 @@ data TypeError
   | CyclicDependency
   | CannotImportMain
   | SelfImport MVar
+  -- type extension errors
+  | AmbiguousPacker TVar
+  | AmbiguousUnpacker TVar
+  | AmbiguousCast TVar TVar
+  | IncompatibleRealization MVar
   deriving(Show, Ord, Eq)
 
 type ModularGamma = Map.Map MVar (Map.Map EVar Type)
@@ -209,7 +248,7 @@ mapT f (TupleE es) = TupleE (map (mapT f) es)
 mapT f (AppE e1 e2) = AppE (mapT f e1) (mapT f e2)
 mapT f (AnnE e t) = AnnE (mapT f e) (f t)
 mapT f (Declaration v e) = Declaration v (mapT f e)
-mapT f (Signature v t) = Signature v (f t)
+mapT f (Signature v t ext) = Signature v (fmap f t) ext
 mapT _ e = e
 
 mapT' :: Monad m => (Type -> m Type) -> Expr -> m Expr
@@ -219,7 +258,7 @@ mapT' f (TupleE es) = TupleE <$> mapM (mapT' f) es
 mapT' f (AppE e1 e2) = AppE <$> mapT' f e1 <*> mapT' f e2
 mapT' f (AnnE e t) = AnnE <$> mapT' f e <*> f t
 mapT' f (Declaration v e) = Declaration <$> pure v <*> mapT' f e
-mapT' f (Signature v t) = Signature <$> pure v <*> f t
+mapT' f (Signature v t ext) = Signature <$> pure v <*> sequence (fmap f t) <*> pure ext
 mapT' _ e = return e
 
 (+>) :: Indexable a => Gamma -> a -> Gamma
@@ -267,7 +306,7 @@ access2 lgi rgi gs
 ann :: Expr -> Type -> Expr
 ann (AnnE e _) t = AnnE e t 
 ann e@(Declaration _ _) _ = e
-ann e@(Signature _ _) _ = e
+ann e@(Signature _ _ _) _ = e
 ann e t = AnnE e t
 
 generalize :: Type -> Type
@@ -378,9 +417,35 @@ prettyExpr (NumE x) = pretty x
 prettyExpr (StrE x) = dquotes (pretty x)
 prettyExpr (LogE x) = pretty x
 prettyExpr (Declaration (EV v) e) = pretty v <+> "=" <+> prettyExpr e
-prettyExpr (Signature (EV v) t) = pretty v <+> "::" <+> prettyGreenType t
 prettyExpr (ListE xs) = list (map prettyExpr xs)
 prettyExpr (TupleE xs) = tupled (map prettyExpr xs)
+prettyExpr (Signature _ Nothing _) = error "Cannot pretty print signatures with no general type"
+prettyExpr (Signature (EV v) (Just t) ext)
+  = pretty v
+  <+> "::" <> props'
+  <+> prettyGreenType t
+  <> cons'
+  <> realizations'
+  where
+    props' = tupled (map prettyProperty (properties ext))
+    cons' = case constraints ext of 
+      [] -> ""
+      ((Con c):cs) -> " where {" <> line
+             <> "    , " <> pretty c <> line
+             <> vsep (map (\c' -> "    " <> pretty c') [c' | (Con c') <- cs]) <> line
+             <> "}"
+    realizations'
+      = vsep
+      . Map.elems
+      $ Map.mapWithKey
+        (\(Lang l) (t', _, _) -> "    " <> pretty v <+> pretty l <+> "::" <+> prettyGreenType t')
+        (realizations ext)
+
+prettyProperty :: Property -> Doc ann
+prettyProperty Pack = "pack"
+prettyProperty Unpack = "unpack"
+prettyProperty Cast = "cast"
+prettyProperty (GeneralProperty ts) = hsep (map pretty ts)
 
 forallVars :: Type -> [Doc a]
 forallVars (Forall (TV s) t) = pretty s : forallVars t
@@ -418,7 +483,7 @@ instance Describable Expr where
   desc (LogE x) = "LogE:" ++ show x
   desc (StrE x) = "StrE:" ++ show x
   desc (Declaration (EV e) _) = "Declaration:" ++ T.unpack e
-  desc (Signature (EV e) _) = "Signature:" ++ T.unpack e
+  desc (Signature (EV e) _ _) = "Signature:" ++ T.unpack e
 
 instance Describable Type where
   desc (UniT) = "UniT"

@@ -389,7 +389,9 @@ infer' g (Declaration v e) = do
       g5 = g4 +> AnnG (VarE v) t3
   return (g5, t3, Declaration v (generalizeE e3))
 -- Signature=>
-infer' g (Signature v t) = return (g +> AnnG (VarE v) t , t, Signature v t)
+-- TODO: add support for extensions and realizations
+infer' g (Signature v (Just t) ext) = return (g +> AnnG (VarE v) t , t, Signature v (Just t) ext)
+infer' g (Signature v Nothing ext) = throwError NotImplemented
 
 
 --  (x:A) in g
