@@ -383,15 +383,17 @@ infer' g (Declaration v e) = do
   (g2, t1, e2) <- infer (g +> MarkEG v) e
   g3 <- cut (MarkEG v) g2
   (g4, t2, e3) <- case lookupE (VarE v) g of
-    (Just t) -> check g2 e2 t
+    (Just (RichType t _)) -> check g2 e2 t
     Nothing -> return (g3, t1, e2)
   let t3 = generalize t2
-      g5 = g4 +> AnnG (VarE v) t3
+      g5 = g4 +> AnnG (VarE v) (enrich t3)
   return (g5, t3, Declaration v (generalizeE e3))
 -- Signature=>
 -- TODO: add support for extensions and realizations
-infer' g (Signature v (Just t) ext) = return (g +> AnnG (VarE v) t , t, Signature v (Just t) ext)
-infer' g (Signature v Nothing ext) = throwError NotImplemented
+infer' g (Signature v (Just t) ext)
+  = return (g +> AnnG (VarE v) (RichType t ext), t, Signature v (Just t) ext)
+infer' g (Signature v Nothing ext)
+  = throwError NotImplemented
 
 
 --  (x:A) in g
@@ -399,7 +401,7 @@ infer' g (Signature v Nothing ext) = throwError NotImplemented
 --  g |- x => A -| g
 infer' g e@(VarE v) = do
   case lookupE e g of
-    (Just t) -> return (g, t, ann e t)
+    (Just (RichType t _)) -> return (g, t, ann e t)
     Nothing -> throwError (UnboundVariable v)
 
 --  g1,Ea,Eb,x:Ea |- e <= Eb -| g2,x:Ea,g3
@@ -408,11 +410,11 @@ infer' g e@(VarE v) = do
 infer' g1 (LamE v e2) = do
   a <- newvar
   b <- newvar
-  let anng = AnnG (VarE v) a
+  let anng = AnnG (VarE v) (enrich a)
       g2 = g1 +> a +> b +> anng
   (g3, t, e2') <- check g2 e2 b
   case lookupE (VarE v) g3 of
-    (Just a') -> do
+    (Just (RichType a' _)) -> do
       let t' = FunT (apply g3 a') t
       g4 <- cut anng g3
       return (g4, t', ann (LamE v e2') t')
@@ -498,7 +500,7 @@ check' _ _ UniT = throwError TypeMismatch
 --  g1 |- \x.e <= A -> B -| g2
 check' g (LamE v e) (FunT a b) = do
   -- define x:A
-  let anng = AnnG (VarE v) a
+  let anng = AnnG (VarE v) (enrich a)
   -- check that e has the expected output type
   (g', t', e') <- check (g +> anng) e b
   -- ignore the trailing context and (x:A), since it is out of scope

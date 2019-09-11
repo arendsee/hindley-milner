@@ -37,6 +37,8 @@ module Xi.Data
   , importFromModularGamma
   , extendModularGamma
   -- * Type extensions
+  , RichType(..)
+  , enrich
   , Property(..)
   , Constraint(..)
   , Language(..)
@@ -94,7 +96,7 @@ data StackConfig = StackConfig {
 data GammaIndex
   = VarG TVar
   -- ^ (G,a)
-  | AnnG Expr Type
+  | AnnG Expr RichType
   -- ^ (G,x:A) looked up in the (Var) and cut in (-->I)
   | ExistG TVar
   -- ^ (G,a^) unsolved existential variable
@@ -212,7 +214,12 @@ data TypeError
   | IncompatibleRealization MVar
   deriving(Show, Ord, Eq)
 
-type ModularGamma = Map.Map MVar (Map.Map EVar Type)
+type ModularGamma = Map.Map MVar (Map.Map EVar RichType)
+
+data RichType = RichType Type TypeExtension deriving(Show, Ord, Eq)
+
+enrich :: Type -> RichType
+enrich t = RichType t emptyTypeExtension
 
 importFromModularGamma :: ModularGamma -> Module -> Stack Gamma
 importFromModularGamma g m = mapM lookupImport (moduleImports m) where
@@ -222,9 +229,9 @@ importFromModularGamma g m = mapM lookupImport (moduleImports m) where
     | v == moduleName m = throwError $ SelfImport v
     | otherwise = case Map.lookup v g of
         (Just g') -> case Map.lookup e g' of
-          (Just t) -> case alias of
-            (Just a) -> return $ AnnG (VarE a) t
-            Nothing -> return $ AnnG (VarE e) t
+          (Just (RichType t ext)) -> case alias of
+            (Just a) -> return $ AnnG (VarE a) (RichType t ext)
+            Nothing -> return $ AnnG (VarE e) (RichType t ext)
           Nothing -> throwError $ BadImport v e
         Nothing -> throwError $ CannotFindModule v
 
@@ -272,7 +279,7 @@ cut i (x:xs)
   | otherwise = cut i xs
 
 -- | Look up a type annotated expression
-lookupE :: Expr -> Gamma -> Maybe Type
+lookupE :: Expr -> Gamma -> Maybe RichType
 lookupE _ [] = Nothing
 lookupE e ((AnnG e' t):gs)
   | e == e' = Just t
@@ -374,7 +381,7 @@ instance Indexable Type where
   index _ = error "Can only index ExistT"
 
 instance Indexable Expr where
-  index (AnnE x t) = AnnG x t
+  index (AnnE x t) = AnnG x (RichType t emptyTypeExtension)
   index _ = error "Can only index AnnE"
 
 typeStyle = SetAnsiStyle {
