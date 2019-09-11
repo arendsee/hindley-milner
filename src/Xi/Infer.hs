@@ -53,6 +53,7 @@ typecheckModules g (m:ms) = do
 
 edge :: (Map.Map MVar Module) -> (MVar, MVar, EVar) -> Stack (MVar, MVar)
 edge mods (v1, v2, e)
+  | v1 == v2 = throwError $ SelfImport v1
   | v2 == (MV "Main") = throwError CannotImportMain
   | otherwise = case Map.lookup v2 mods of
       (Just m') -> if elem e (moduleExports m')
@@ -62,7 +63,7 @@ edge mods (v1, v2, e)
 
 insertWithCheck :: Map.Map MVar Module -> (MVar, Module) -> Stack (Map.Map MVar Module)
 insertWithCheck ms (v, m) = case Map.insertLookupWithKey (\_ _ y -> y) v m ms of
-  (Just m', _) -> throwError $ MultipleModuleDeclarations m'
+  (Just m', _) -> throwError $ MultipleModuleDeclarations (moduleName m')
   (Nothing, ms') -> return ms'
 
 -- produce a path from sources to pools, die on cycles

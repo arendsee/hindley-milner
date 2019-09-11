@@ -9,7 +9,7 @@ import Xi.Data
 
 import Test.Tasty
 import Test.Tasty.HUnit
-import Data.Text (unpack, pack, Text)
+import qualified Data.Text as T
 
 main :: [Module] -> [Expr]
 main [] = error "Missing main"
@@ -25,38 +25,38 @@ typeof es = typeof' . head . reverse $ es where
   typeof' (AppE _ t) = typeof' t
   typeof' t = error ("No annotation found for: " <> show t)
 
-exprTestGood :: Text -> Type -> TestTree
+exprTestGood :: T.Text -> Type -> TestTree
 exprTestGood e t
-  = testCase (unpack e)
+  = testCase (T.unpack e)
   $ case runStack (typecheck (readProgram e)) of
       (Right es', _) -> assertEqual "" t (typeof (main es'))
       (Left err, _) -> error (show err)
 
-exprTestFull :: Text -> Text -> TestTree
+exprTestFull :: T.Text -> T.Text -> TestTree
 exprTestFull code expCode
-  = testCase (unpack code)
+  = testCase (T.unpack code)
   $ case runStack (typecheck (readProgram code)) of
       (Right e, _) -> assertEqual "" (main e) (main $ readProgram expCode) 
       (Left err, _) -> error (show err)
 
-exprTestBad :: Text -> TestTree
+exprTestBad :: T.Text -> TestTree
 exprTestBad e
-  = testCase ("Fails?: " <> unpack e)
+  = testCase ("Fails?: " <> T.unpack e)
   $ case runStack (typecheck (readProgram e)) of
-      (Right _, _) -> assertFailure . unpack $ "Expected '" <> e <> "' to fail"
+      (Right _, _) -> assertFailure . T.unpack $ "Expected '" <> e <> "' to fail"
       (Left _, _) -> return ()
 
-expectError :: Text -> TypeError -> TestTree
-expectError expr err = testCase ("Fails?: " <> unpack expr)
+expectError :: T.Text -> TypeError -> TestTree
+expectError expr err = testCase ("Fails?: " <> T.unpack expr)
   $ case runStack (typecheck (readProgram expr)) of
-      (Right _, _) -> assertFailure . unpack $ "Expected failure"
+      (Right _, _) -> assertFailure . T.unpack $ "Expected failure"
       (Left err, _) -> return ()
       (Left err', _) -> assertFailure
         $ "Expected error (" <> show err <> ") got error (" <> show err' <> ")"
 
-testPasses :: Text -> TestTree
+testPasses :: T.Text -> TestTree
 testPasses e
-  = testCase ("Fails?: " <> unpack e)
+  = testCase ("Fails?: " <> T.unpack e)
   $ case runStack (typecheck (readProgram e)) of
       (Right _, _) -> return ()
       (Left e, _) -> assertFailure $ "Expected this test to pass, but it failed with the message: " <> show e
@@ -74,7 +74,7 @@ var s = VarT (TV s)
 arr s ts = ArrT (TV s) ts 
 lst t = arr "List" [t]
 tuple ts = ArrT v ts where
-  v = (TV . pack) ("Tuple" ++ show (length ts))
+  v = (TV . T.pack) ("Tuple" ++ show (length ts))
 
 unitTests = testGroup "Unit tests"
   [
@@ -163,9 +163,30 @@ unitTests = testGroup "Unit tests"
 
     -- tests modules ----------------------------------------------------------
     , exprTestGood "module Main {[1,2,3]}" (lst int)
-    , exprTestGood " module Foo {export x; x = 42};\
-                    \module Bar {export f; f :: forall a . a -> [a]};\
-                    \module Main {import Foo (x); import Bar (f); f x}" (lst int)
+    , (flip exprTestGood) (lst int) $ T.unlines
+        [ "module Foo {export x; x = 42};"
+        , "module Bar {export f; f :: forall a . a -> [a]};"
+        , "module Main {import Foo (x); import Bar (f); f x}"
+        ]
+    , (flip expectError) (BadImport (MV "Foo") (EV "x")) $ T.unlines
+        [ "module Foo {export y; y = 42};"
+        , "module Main {import Foo (x); x}"
+        ]
+    , (flip expectError) CannotImportMain $ T.unlines
+        [ "module Main {export x; x = 42};"
+        , "module Foo {import x}"
+        ]
+    , (flip expectError) CyclicDependency $ T.unlines
+        [ "module Foo {import Bar y; export x; x = 42};"
+        , "module Bar {import Foo x; export y; y = 88}"
+        ]
+    , (flip expectError) (MultipleModuleDeclarations (MV "Foo")) $ T.unlines
+        [ "module Foo {x = 42};"
+        , "module Foo {x = 88}"
+        ]
+    , (flip expectError) (SelfImport (MV "Foo")) $ T.unlines
+        [ "module Foo {import Foo x; x = 42}"
+        ]
 
     -- internal ---------------------------------------------------------------
     , exprTestFull "f :: forall a . a -> Bool; f 42"

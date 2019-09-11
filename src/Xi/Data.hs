@@ -159,11 +159,13 @@ data TypeError
   | UnkindJackass
   | NoAnnotationFound
   | OtherError T.Text
-  | MultipleModuleDeclarations Module
+  -- module errors
+  | MultipleModuleDeclarations MVar
   | BadImport MVar EVar
   | CannotFindModule MVar
   | CyclicDependency
   | CannotImportMain
+  | SelfImport MVar
   deriving(Show, Ord, Eq)
 
 mapT :: (Type -> Type) -> Expr -> Expr
