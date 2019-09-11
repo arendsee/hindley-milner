@@ -187,6 +187,10 @@ unitTests = testGroup "Unit tests"
     , (flip expectError) (SelfImport (MV "Foo")) $ T.unlines
         [ "module Foo {import Foo x; x = 42}"
         ]
+    , (flip expectError) (BadImport (MV "Foo") (EV "x")) $ T.unlines
+        [ "module Foo {x = 42};"
+        , "module Main {import Foo (x); x}"
+        ]
 
     -- internal ---------------------------------------------------------------
     , exprTestFull "f :: forall a . a -> Bool; f 42"

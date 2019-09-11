@@ -27,39 +27,24 @@ import qualified Data.List.Extra as LE
 typecheck :: [Module] -> Stack [Module]
 typecheck ms = do
   mods <- foldM insertWithCheck Map.empty [(moduleName m, m) | m <- ms]
-
-  -- this checks for a couple classes of error
-  -- FIXME: scrap the kludge
-  mapM (edge mods) $ concat [[(moduleName m, v, e) | (v, e, _) <- moduleImports m] | m <- ms]
-
   -- graph :: Map MVar (Set MVar)
   let graph = Map.fromList $ map mod2pair ms
   mods' <- path graph
   case mapM (flip Map.lookup $ mods) mods' of
-    (Just mods'') -> fmap (reverse . snd) $ typecheckModules [] mods''
+    (Just mods'') -> fmap reverse $ typecheckModules (Map.empty) mods''
     Nothing -> throwError UnknownError -- this shouldn't happen
 
 mod2pair :: Module -> (MVar, Set.Set MVar)
 mod2pair m = (moduleName m, Set.fromList $ map (\(m',_,_) -> m') (moduleImports m))
 
-typecheckModules :: Gamma -> [Module] -> Stack (Gamma, [Module])
-typecheckModules g [] = return (g, [])
-typecheckModules g (m:ms) = do
+typecheckModules :: ModularGamma -> [Module] -> Stack [Module]
+typecheckModules mg [] = return []
+typecheckModules mg (m:ms) = do
+  g <- importFromModularGamma mg m
   (g', exprs) <- typecheckExpr g (moduleBody m)
-  (g'', mods) <- typecheckModules g' ms 
-  return (g'', m {moduleBody = exprs} : mods)
-
--- typecheckExpr :: Gamma -> [Expr] -> Stack (Gamma, [Expr])
-
-edge :: (Map.Map MVar Module) -> (MVar, MVar, EVar) -> Stack (MVar, MVar)
-edge mods (v1, v2, e)
-  | v1 == v2 = throwError $ SelfImport v1
-  | v2 == (MV "Main") = throwError CannotImportMain
-  | otherwise = case Map.lookup v2 mods of
-      (Just m') -> if elem e (moduleExports m')
-                   then return (v1, v2)
-                   else throwError $ BadImport v2 e
-      Nothing -> throwError $ CannotFindModule v2
+  mg' <- extendModularGamma g' m mg
+  mods <- typecheckModules mg' ms 
+  return (m {moduleBody = exprs} : mods)
 
 insertWithCheck :: Map.Map MVar Module -> (MVar, Module) -> Stack (Map.Map MVar Module)
 insertWithCheck ms (v, m) = case Map.insertLookupWithKey (\_ _ y -> y) v m ms of
@@ -250,7 +235,9 @@ subtype' a@(ExistT _) b g = occursCheck b a >> instantiate a b g
 --  g1,>Ea,Ea |- [Ea/x]A <: B -| g2,>Ea,g3
 -- ----------------------------------------- <:ForallL
 --  g1 |- Forall x . A <: B -| g2
-subtype' (Forall x a) b g = subtype (substitute x a) b (g +> MarkG x +> ExistG x) >>= cut (MarkG x)
+subtype' (Forall x a) b g
+  =   subtype (substitute x a) b (g +> MarkG x +> ExistG x)
+  >>= cut (MarkG x)
 
 --  g1,a |- A :> B -| g2,a,g3
 -- ----------------------------------------- <:ForallR

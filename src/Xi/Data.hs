@@ -32,6 +32,10 @@ module Xi.Data
   , prettyModule
   , prettyType
   , desc
+  -- * ModuleGamma paraphernalia
+  , ModularGamma
+  , importFromModularGamma
+  , extendModularGamma
 ) where
 
 import qualified Data.List as DL
@@ -44,6 +48,7 @@ import qualified Control.Monad.Identity as MI
 import qualified Control.Monad as CM
 import qualified Data.Text as T
 import qualified Data.Set as Set
+import qualified Data.Map as Map
 import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.Terminal
 import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
@@ -167,6 +172,35 @@ data TypeError
   | CannotImportMain
   | SelfImport MVar
   deriving(Show, Ord, Eq)
+
+type ModularGamma = Map.Map MVar (Map.Map EVar Type)
+
+importFromModularGamma :: ModularGamma -> Module -> Stack Gamma
+importFromModularGamma g m = mapM lookupImport (moduleImports m) where
+  lookupImport :: (MVar, EVar, Maybe EVar) -> Stack GammaIndex
+  lookupImport (v, e, alias)
+    | v == MV "Main" = throwError CannotImportMain
+    | v == moduleName m = throwError $ SelfImport v
+    | otherwise = case Map.lookup v g of
+        (Just g') -> case Map.lookup e g' of
+          (Just t) -> case alias of
+            (Just a) -> return $ AnnG (VarE a) t
+            Nothing -> return $ AnnG (VarE e) t
+          Nothing -> throwError $ BadImport v e
+        Nothing -> throwError $ CannotFindModule v
+
+extendModularGamma
+  :: Gamma -- ^ context generated from typechecking this module
+  -> Module -- ^ the module that is being loaded into the modular context
+  -> ModularGamma -- ^ the previous object
+  -> Stack ModularGamma
+extendModularGamma g m mg
+  | Map.member v mg = throwError $ MultipleModuleDeclarations v
+  | otherwise = return $ Map.insert v g' mg
+  where
+    v = moduleName m
+    es = moduleExports m
+    g' = Map.fromList [(e, t) | (AnnG (VarE e) t) <- g, elem e es]
 
 mapT :: (Type -> Type) -> Expr -> Expr
 mapT f (LamE v e) = LamE v (mapT f e)
