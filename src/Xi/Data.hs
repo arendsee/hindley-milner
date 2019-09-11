@@ -100,7 +100,7 @@ data Module = Module {
     moduleName :: MVar
   , moduleImports :: [(MVar, EVar, Maybe EVar)]
   , moduleExports :: [EVar]
-  , moduleExpressions :: [Expr]
+  , moduleBody :: [Expr]
 } deriving (Ord, Eq, Show)
 
 -- | Terms, see Dunfield Figure 1
@@ -322,7 +322,7 @@ prettyBlock :: Module -> Doc AnsiStyle
 prettyBlock m
   =  vsep (map prettyImport (moduleImports m))
   <> vsep ["export" <+> pretty e <> line | (EV e) <- moduleExports m]
-  <> vsep (map prettyExpr (moduleExpressions m))
+  <> vsep (map prettyExpr (moduleBody m))
 
 prettyImport :: (MVar, EVar, Maybe EVar) -> Doc AnsiStyle
 prettyImport (MV m, EV e, Just (EV alias))

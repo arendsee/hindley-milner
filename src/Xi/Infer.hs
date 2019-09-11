@@ -45,9 +45,9 @@ mod2pair m = (moduleName m, Set.fromList $ map (\(m',_,_) -> m') (moduleImports 
 typecheckModules :: Gamma -> [Module] -> Stack (Gamma, [Module])
 typecheckModules g [] = return (g, [])
 typecheckModules g (m:ms) = do
-  (g', exprs) <- typecheckExpr g (moduleExpressions m)
+  (g', exprs) <- typecheckExpr g (moduleBody m)
   (g'', mods) <- typecheckModules g' ms 
-  return (g'', m {moduleExpressions = exprs} : mods)
+  return (g'', m {moduleBody = exprs} : mods)
 
 -- typecheckExpr :: Gamma -> [Expr] -> Stack (Gamma, [Expr])
 

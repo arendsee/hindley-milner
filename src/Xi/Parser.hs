@@ -55,55 +55,55 @@ readProgram s = case parse (pProgram <* eof) "" s of
 
 data Toplevel
   = TModule Module
-  | TModuleExpression ModuleExpression 
+  | TModuleBody ModuleBody 
 
-data ModuleExpression
+data ModuleBody
   = Import [(MVar, EVar, Maybe EVar)]
   -- ^ module name, function name and optional alias
   | Export EVar
-  | Expression Expr
+  | Body Expr
 
 pProgram :: Parser [Module]
 pProgram = do
   es <- sepBy pToplevel (symbol ";")
   let mods = [m | (TModule m) <- es]
-  case [e | (TModuleExpression e) <- es] of
+  case [e | (TModuleBody e) <- es] of
     [] -> return mods
     es' -> return $ makeModule (MV "Main") es' : mods
 
 pToplevel :: Parser Toplevel
 pToplevel =   try (fmap TModule pModule)
-          <|> fmap TModuleExpression pModuleExpression
+          <|> fmap TModuleBody pModuleBody
 
 pModule :: Parser Module
 pModule = do
   _ <- symbol "module"
   moduleName <- name
-  mes <- braces ( sepBy pModuleExpression (symbol ";") )
+  mes <- braces ( sepBy pModuleBody (symbol ";") )
   return $ makeModule (MV moduleName) mes
 
-makeModule :: MVar -> [ModuleExpression] -> Module
+makeModule :: MVar -> [ModuleBody] -> Module
 makeModule n mes = Module {
       moduleName = n
     , moduleImports = imports'
     , moduleExports = exports'
-    , moduleExpressions = expressions'
+    , moduleBody = body'
   } where
   imports' = concat $ [x | (Import x) <- mes]
   exports' = [x | (Export x) <- mes]
-  expressions' = [x | (Expression x) <- mes]
+  body' = [x | (Body x) <- mes]
 
-pModuleExpression :: Parser ModuleExpression
-pModuleExpression
+pModuleBody :: Parser ModuleBody
+pModuleBody
   =   try pImport
   <|> try pExport
   <|> try pStatement'
   <|> pExpr'
   where
-    pStatement' = fmap Expression pStatement
-    pExpr' = fmap Expression pExpr
+    pStatement' = fmap Body pStatement
+    pExpr' = fmap Body pExpr
 
-pImport :: Parser ModuleExpression
+pImport :: Parser ModuleBody
 pImport = do
   _ <- symbol "import"
   moduleName <- name
@@ -116,7 +116,7 @@ pImportTerm = do
   a <- optional (symbol "as" >> name)
   return (EV n, fmap EV a)
 
-pExport :: Parser ModuleExpression
+pExport :: Parser ModuleBody
 pExport = fmap (Export . EV) $ symbol "export" >> name
 
 pStatement :: Parser Expr
