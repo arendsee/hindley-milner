@@ -11,6 +11,12 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Data.Text (unpack, pack, Text)
 
+main :: [Module] -> [Expr]
+main [] = error "Missing main"
+main (m:ms)
+  | moduleName m == (MV "Main") = moduleBody m
+  | otherwise = main ms
+
 -- get the toplevel type of a fully annotated expression
 typeof :: [Expr] -> Type
 typeof es = typeof' . head . reverse $ es where
@@ -23,14 +29,14 @@ exprTestGood :: Text -> Type -> TestTree
 exprTestGood e t
   = testCase (unpack e)
   $ case runStack (typecheck (readProgram e)) of
-      (Right es', _) -> assertEqual "" t (typeof es')
+      (Right es', _) -> assertEqual "" t (typeof (main es'))
       (Left err, _) -> error (show err)
 
 exprTestFull :: Text -> Text -> TestTree
 exprTestFull code expCode
   = testCase (unpack code)
   $ case runStack (typecheck (readProgram code)) of
-      (Right e, _) -> assertEqual "" e (readProgram expCode) 
+      (Right e, _) -> assertEqual "" (main e) (main $ readProgram expCode) 
       (Left err, _) -> error (show err)
 
 exprTestBad :: Text -> TestTree
