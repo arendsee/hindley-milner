@@ -49,7 +49,7 @@ name = lexeme $ do
   return (T.pack $ f:rs)
 
 readProgram :: T.Text -> [Module]
-readProgram s = case parse (pProgram <* eof) "" s of 
+readProgram s = case parse (space >> pProgram <* eof) "" s of 
       Left err -> error (show err)
       Right es -> es
 

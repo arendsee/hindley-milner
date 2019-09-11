@@ -54,6 +54,13 @@ expectError expr err = testCase ("Fails?: " <> unpack expr)
       (Left err', _) -> assertFailure
         $ "Expected error (" <> show err <> ") got error (" <> show err' <> ")"
 
+testPasses :: Text -> TestTree
+testPasses e
+  = testCase ("Fails?: " <> unpack e)
+  $ case runStack (typecheck (readProgram e)) of
+      (Right _, _) -> return ()
+      (Left e, _) -> assertFailure $ "Expected this test to pass, but it failed with the message: " <> show e
+
 int = VarT (TV "Int")
 bool = VarT (TV "Bool")
 num = VarT (TV "Num")
@@ -110,6 +117,8 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "[]" (forall ["a"] (lst (var "a")))
     , exprTestGood "f :: [Int] -> Bool; f [1]" bool
     , exprTestGood "f :: forall a . [a] -> Bool; f [1]" bool
+    -- * test extra space
+    , exprTestGood " 42" int
     -- * adding signatures to declarations
     , exprTestGood "f :: forall a . a -> a; f x = x; f 42" int
     , exprTestGood "f :: Int -> Bool; f x = True; f 42" bool
@@ -151,6 +160,12 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "\\f -> f 5" 
                    (forall ["a"] (fun [fun [int, var "a"], var "a"]))
                    -- forall a . (Int -> a) -> a
+
+    -- tests modules ----------------------------------------------------------
+    , exprTestGood "module Main {[1,2,3]}" (lst int)
+    , exprTestGood " module Foo {export x; x = 42};\
+                    \module Bar {export f; f :: forall a . a -> [a]};\
+                    \module Main {import Foo (x); import Bar (f); f x}" (lst int)
 
     -- internal ---------------------------------------------------------------
     , exprTestFull "f :: forall a . a -> Bool; f 42"
