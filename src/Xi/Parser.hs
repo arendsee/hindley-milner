@@ -36,6 +36,9 @@ parens p = lexeme $ between (symbol "(") (symbol ")") p
 brackets :: Parser a -> Parser a
 brackets p = lexeme $ between (symbol "[") (symbol "]") p
 
+braces :: Parser a -> Parser a
+braces p = lexeme $ between (symbol "{") (symbol "}") p
+
 angles :: Parser a -> Parser a
 angles p = lexeme $ between (symbol "<") (symbol ">") p
 
@@ -45,13 +48,76 @@ name = lexeme $ do
   rs <- many C.alphaNumChar
   return (T.pack $ f:rs)
 
-readProgram :: T.Text -> [Expr]
+readProgram :: T.Text -> [Module]
 readProgram s = case parse (pProgram <* eof) "" s of 
-  Left err -> error (show err)
-  Right es -> es
+      Left err -> error (show err)
+      Right es -> es
 
-pProgram :: Parser [Expr]
-pProgram = sepBy (try pStatement <|> pExpr) (symbol ";")
+data Toplevel
+  = TModule Module
+  | TModuleExpression ModuleExpression 
+
+data ModuleExpression
+  = Import [(MVar, EVar, Maybe EVar)]
+  -- ^ module name, function name and optional alias
+  | Export EVar
+  | Expression Expr
+
+pProgram :: Parser [Module]
+pProgram = do
+  es <- sepBy pToplevel (symbol ";")
+  let mods = [m | (TModule m) <- es]
+  case [e | (TModuleExpression e) <- es] of
+    [] -> return mods
+    es' -> return $ makeModule (MV "Main") es' : mods
+
+pToplevel :: Parser Toplevel
+pToplevel =   try (fmap TModule pModule)
+          <|> fmap TModuleExpression pModuleExpression
+
+pModule :: Parser Module
+pModule = do
+  _ <- symbol "module"
+  moduleName <- name
+  mes <- braces ( sepBy pModuleExpression (symbol ";") )
+  return $ makeModule (MV moduleName) mes
+
+makeModule :: MVar -> [ModuleExpression] -> Module
+makeModule n mes = Module {
+      moduleName = n
+    , moduleImports = imports'
+    , moduleExports = exports'
+    , moduleExpressions = expressions'
+  } where
+  imports' = concat $ [x | (Import x) <- mes]
+  exports' = [x | (Export x) <- mes]
+  expressions' = [x | (Expression x) <- mes]
+
+pModuleExpression :: Parser ModuleExpression
+pModuleExpression
+  =   try pImport
+  <|> try pExport
+  <|> try pStatement'
+  <|> pExpr'
+  where
+    pStatement' = fmap Expression pStatement
+    pExpr' = fmap Expression pExpr
+
+pImport :: Parser ModuleExpression
+pImport = do
+  _ <- symbol "import"
+  moduleName <- name
+  functions <- parens (sepBy pImportTerm (symbol ","))
+  return $ Import [(MV moduleName, e, a) | (e, a) <- functions]
+
+pImportTerm :: Parser (EVar, Maybe EVar)
+pImportTerm = do
+  n <- name
+  a <- optional (symbol "as" >> name)
+  return (EV n, fmap EV a)
+
+pExport :: Parser ModuleExpression
+pExport = fmap (Export . EV) $ symbol "export" >> name
 
 pStatement :: Parser Expr
 pStatement = try pDeclaration <|> pSignature

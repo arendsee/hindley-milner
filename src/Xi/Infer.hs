@@ -15,25 +15,89 @@ module Xi.Infer (
 ) where
 
 import Xi.Data
-import Control.Monad (replicateM)
+import Control.Monad (replicateM, foldM)
 import qualified Data.Text as T
 import qualified Data.Set as Set
+import qualified Data.Map as Map
 import qualified Data.List as L
+import qualified Data.List.Extra as LE
 
 -- import Debug.Trace
 
-typecheck :: [Expr] -> Stack [Expr]
-typecheck e = do
+typecheck :: [Module] -> Stack [Module]
+typecheck ms = do
+  mods <- foldM insertWithCheck Map.empty [(moduleName m, m) | m <- ms]
+
+  -- this checks for a couple classes of error
+  -- FIXME: scrap the kludge
+  mapM (edge mods) $ concat [[(moduleName m, v, e) | (v, e, _) <- moduleImports m] | m <- ms]
+
+  -- graph :: Map MVar (Set MVar)
+  let graph = Map.fromList $ map mod2pair ms
+  mods' <- path graph
+  case mapM (flip Map.lookup $ mods) mods' of
+    (Just mods'') -> fmap (reverse . snd) $ typecheckModules [] mods''
+    Nothing -> throwError UnknownError -- this shouldn't happen
+
+mod2pair :: Module -> (MVar, Set.Set MVar)
+mod2pair m = (moduleName m, Set.fromList $ map (\(m',_,_) -> m') (moduleImports m))
+
+typecheckModules :: Gamma -> [Module] -> Stack (Gamma, [Module])
+typecheckModules g [] = return (g, [])
+typecheckModules g (m:ms) = do
+  (g', exprs) <- typecheckExpr g (moduleExpressions m)
+  (g'', mods) <- typecheckModules g' ms 
+  return (g'', m {moduleExpressions = exprs} : mods)
+
+-- typecheckExpr :: Gamma -> [Expr] -> Stack (Gamma, [Expr])
+
+edge :: (Map.Map MVar Module) -> (MVar, MVar, EVar) -> Stack (MVar, MVar)
+edge mods (v1, v2, e)
+  | v2 == (MV "Main") = throwError CannotImportMain
+  | otherwise = case Map.lookup v2 mods of
+      (Just m') -> if elem e (moduleExports m')
+                   then return (v1, v2)
+                   else throwError $ BadImport v2 e
+      Nothing -> throwError $ CannotFindModule v2
+
+insertWithCheck :: Map.Map MVar Module -> (MVar, Module) -> Stack (Map.Map MVar Module)
+insertWithCheck ms (v, m) = case Map.insertLookupWithKey (\_ _ y -> y) v m ms of
+  (Just m', _) -> throwError $ MultipleModuleDeclarations m'
+  (Nothing, ms') -> return ms'
+
+-- produce a path from sources to pools, die on cycles
+path :: (Eq a, Ord a) => Map.Map a (Set.Set a) -> Stack [a]
+path m
+  | Map.size m == 0 = return []
+  | otherwise =
+      if Map.size rootMap == 0
+      then throwError CyclicDependency
+      else do
+        rest <- path (Map.difference m rootMap)
+        return (rest ++ Map.keys rootMap)
+  where
+    rootMap = Map.filterWithKey (isRoot m) m
+
+isRoot :: (Ord a) => Map.Map a (Set.Set a) -> a -> Set.Set a -> Bool
+isRoot m k _ = not $ Map.foldr (isChild k) False m
+  where
+    isChild :: (Ord a) => a -> Set.Set a -> Bool -> Bool
+    isChild _ _ True = True 
+    isChild k s False = Set.member k s
+
+
+typecheckExpr :: Gamma -> [Expr] -> Stack (Gamma, [Expr])
+typecheckExpr g e = do
   es <- fmap L.sort (mapM renameExpr e)
   -- traceShowM es
-  (g, es') <- typecheck' [] [] es 
-  return $ map (generalizeE . unrenameExpr . applyE g) (reverse es')
+  (g', es') <- typecheckExpr' g [] es 
+  return $ (g', map (generalizeE . unrenameExpr . applyE g') (reverse es'))
 
-typecheck' :: Gamma -> [Expr] -> [Expr] -> Stack (Gamma, [Expr])
-typecheck' g es [] = return (g, es)
-typecheck' g es (x:xs) = do
+typecheckExpr' :: Gamma -> [Expr] -> [Expr] -> Stack (Gamma, [Expr])
+typecheckExpr' g es [] = return (g, es)
+typecheckExpr' g es (x:xs) = do
   (g', _, e') <- infer g x
-  typecheck' g' (e':es) xs
+  typecheckExpr' g' (e':es) xs
 
 renameExpr :: Expr -> Stack Expr
 renameExpr = mapT' renameType

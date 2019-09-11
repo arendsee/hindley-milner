@@ -4,9 +4,11 @@ module Xi.Data
   , Expr(..)
   , EVar(..)
   , TVar(..)
+  , MVar(..)
   , Type(..)
   , Gamma
   , GammaIndex(..)
+  , Module(..)
   , cut
   , (+>)
   , TypeError(..)
@@ -27,6 +29,7 @@ module Xi.Data
   , newqul
   -- * pretty printing
   , prettyExpr
+  , prettyModule
   , prettyType
   , desc
 ) where
@@ -44,6 +47,8 @@ import qualified Data.Set as Set
 import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.Terminal
 import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
+
+data Dag a = Node a [Dag a] deriving(Show, Eq, Ord)
 
 type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s MI.Identity))) a
 type Stack a = GeneralStack StackConfig TypeError [T.Text] StackState a
@@ -63,6 +68,7 @@ runStack e
 
 type Gamma = [GammaIndex]
 newtype EVar = EV T.Text deriving(Show, Eq, Ord)
+newtype MVar = MV T.Text deriving(Show, Eq, Ord)
 newtype TVar = TV T.Text deriving(Show, Eq, Ord)
 
 data StackState = StackState {
@@ -89,6 +95,13 @@ data GammaIndex
   -- ^ (G,>a^) Store a type variable marker bound under a forall
   | MarkEG EVar
   deriving(Ord, Eq, Show)
+
+data Module = Module {
+    moduleName :: MVar
+  , moduleImports :: [(MVar, EVar, Maybe EVar)]
+  , moduleExports :: [EVar]
+  , moduleExpressions :: [Expr]
+} deriving (Ord, Eq, Show)
 
 -- | Terms, see Dunfield Figure 1
 data Expr
@@ -146,6 +159,11 @@ data TypeError
   | UnkindJackass
   | NoAnnotationFound
   | OtherError T.Text
+  | MultipleModuleDeclarations Module
+  | BadImport MVar EVar
+  | CannotFindModule MVar
+  | CyclicDependency
+  | CannotImportMain
   deriving(Show, Ord, Eq)
 
 mapT :: (Type -> Type) -> Expr -> Expr
@@ -291,6 +309,26 @@ typeStyle = SetAnsiStyle {
     , ansiItalics     = Nothing             -- ^ Switch on italics, or don’t do anything.
     , ansiUnderlining = Just Underlined     -- ^ Switch on underlining, or don’t do anything.
   } 
+
+prettyMVar :: MVar -> Doc AnsiStyle
+prettyMVar (MV x) = pretty x
+
+prettyModule :: Module -> Doc AnsiStyle
+prettyModule m
+  =  prettyMVar (moduleName m)
+  <+> braces (line <> (indent 4 (prettyBlock m)) <> line)
+
+prettyBlock :: Module -> Doc AnsiStyle
+prettyBlock m
+  =  vsep (map prettyImport (moduleImports m))
+  <> vsep ["export" <+> pretty e <> line | (EV e) <- moduleExports m]
+  <> vsep (map prettyExpr (moduleExpressions m))
+
+prettyImport :: (MVar, EVar, Maybe EVar) -> Doc AnsiStyle
+prettyImport (MV m, EV e, Just (EV alias))
+  = "from" <+> pretty m <+> "import" <+> pretty e <+> "as" <+> pretty alias <> line
+prettyImport (MV m, EV e, Nothing)
+  = "from" <+> pretty m <+> "import" <+> pretty e <> line
 
 prettyExpr :: Expr -> Doc AnsiStyle
 prettyExpr UniE = "()"

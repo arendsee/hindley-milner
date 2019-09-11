@@ -18,6 +18,7 @@ dependencies:
 - QuickCheck
 - prettyprinter
 - prettyprinter-ansi-terminal
+- extra
 
 default-extensions:
   - OverloadedStrings
