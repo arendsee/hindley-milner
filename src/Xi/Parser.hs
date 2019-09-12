@@ -163,16 +163,16 @@ pSignature = do
   t <- pType
   constraints <- option [] $ reserved "where" >> parens (sepBy1 pConstraint (symbol ","))
   case lang of
-    (Just langStr) -> return $ Signature (EV v) Nothing (TypeExtension
-      { properties = []
-      , realizations = Map.fromList [(Lang langStr, (t, props, constraints))]
-      , constraints = []
-      })
-    Nothing -> return $ Signature (EV v) (Just t) (TypeExtension
-      { properties = props
+    (Just langStr) -> return $ Signature (EV v) (RichType Nothing (TypeExtension
+      { properties = Set.empty
+      , realizations = Map.fromList [(Lang langStr, Set.singleton $ Realization t props constraints)]
+      , constraints = Set.empty
+      }))
+    Nothing -> return $ Signature (EV v) (RichType (Just t) (TypeExtension
+      { properties = Set.fromList props
       , realizations = Map.empty
-      , constraints = constraints
-      })
+      , constraints = Set.fromList constraints
+      }))
 
 pProperty :: Parser Property
 pProperty = do 

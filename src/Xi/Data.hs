@@ -43,6 +43,7 @@ module Xi.Data
   , Constraint(..)
   , Language(..)
   , TypeExtension(..)
+  , Realization(..)
   , emptyTypeExtension
 ) where
 
@@ -116,7 +117,7 @@ data Module = Module {
 
 -- | Terms, see Dunfield Figure 1
 data Expr
-  = Signature EVar (Maybe Type) TypeExtension
+  = Signature EVar RichType
   -- ^ x :: A; e
   | Declaration EVar Expr
   -- ^ x=e1; e2
@@ -170,17 +171,19 @@ newtype Constraint = Con T.Text deriving(Show, Eq, Ord)
 -- leave it as general text.
 newtype Language = Lang T.Text deriving(Show, Eq, Ord)
 
+data Realization = Realization Type [Property] [Constraint] deriving(Show, Eq, Ord)
+
 data TypeExtension = TypeExtension {
-    properties :: [Property]
-  , realizations :: Map.Map Language (Type, [Property], [Constraint])
-  , constraints :: [Constraint]
+    properties :: Set.Set Property
+  , realizations :: Map.Map Language (Set.Set Realization)
+  , constraints :: Set.Set Constraint
 } deriving(Show, Eq, Ord)
 
 emptyTypeExtension :: TypeExtension
 emptyTypeExtension = TypeExtension {
-    properties = []
+    properties = Set.empty
   , realizations = Map.empty
-  , constraints = []
+  , constraints = Set.empty
 }
 
 data TypeError
@@ -212,14 +215,15 @@ data TypeError
   | AmbiguousUnpacker TVar
   | AmbiguousCast TVar TVar
   | IncompatibleRealization MVar
+  | MissingAbstractType
   deriving(Show, Ord, Eq)
 
 type ModularGamma = Map.Map MVar (Map.Map EVar RichType)
 
-data RichType = RichType Type TypeExtension deriving(Show, Ord, Eq)
+data RichType = RichType (Maybe Type) TypeExtension deriving(Show, Ord, Eq)
 
 enrich :: Type -> RichType
-enrich t = RichType t emptyTypeExtension
+enrich t = RichType (Just t) emptyTypeExtension
 
 importFromModularGamma :: ModularGamma -> Module -> Stack Gamma
 importFromModularGamma g m = mapM lookupImport (moduleImports m) where
@@ -229,9 +233,9 @@ importFromModularGamma g m = mapM lookupImport (moduleImports m) where
     | v == moduleName m = throwError $ SelfImport v
     | otherwise = case Map.lookup v g of
         (Just g') -> case Map.lookup e g' of
-          (Just (RichType t ext)) -> case alias of
-            (Just a) -> return $ AnnG (VarE a) (RichType t ext)
-            Nothing -> return $ AnnG (VarE e) (RichType t ext)
+          (Just t) -> case alias of
+            (Just a) -> return $ AnnG (VarE a) t
+            Nothing -> return $ AnnG (VarE e) t
           Nothing -> throwError $ BadImport v e
         Nothing -> throwError $ CannotFindModule v
 
@@ -255,7 +259,7 @@ mapT f (TupleE es) = TupleE (map (mapT f) es)
 mapT f (AppE e1 e2) = AppE (mapT f e1) (mapT f e2)
 mapT f (AnnE e t) = AnnE (mapT f e) (f t)
 mapT f (Declaration v e) = Declaration v (mapT f e)
-mapT f (Signature v t ext) = Signature v (fmap f t) ext
+mapT f (Signature v (RichType t ext)) = Signature v (RichType (fmap f t) ext)
 mapT _ e = e
 
 mapT' :: Monad m => (Type -> m Type) -> Expr -> m Expr
@@ -265,7 +269,9 @@ mapT' f (TupleE es) = TupleE <$> mapM (mapT' f) es
 mapT' f (AppE e1 e2) = AppE <$> mapT' f e1 <*> mapT' f e2
 mapT' f (AnnE e t) = AnnE <$> mapT' f e <*> f t
 mapT' f (Declaration v e) = Declaration <$> pure v <*> mapT' f e
-mapT' f (Signature v t ext) = Signature <$> pure v <*> sequence (fmap f t) <*> pure ext
+mapT' f (Signature v (RichType t ext))
+  =   Signature <$> pure v
+  <*> (RichType <$> sequence (fmap f t) <*> pure ext)
 mapT' _ e = return e
 
 (+>) :: Indexable a => Gamma -> a -> Gamma
@@ -294,6 +300,15 @@ lookupT v ((SolvedG v' t):gs)
   | otherwise = lookupT v gs
 lookupT v (_:gs) = lookupT v gs
 
+lookupE' :: Expr -> Gamma -> Maybe (Gamma, GammaIndex, Gamma)
+lookupE' e gs = case DL.findIndex f gs of
+  (Just 0) -> Just ([], head gs, tail gs)
+  (Just i) -> Just (take i gs, gs !! i, drop (i+1) gs)
+  _ -> Nothing
+  where
+    f (AnnG e _) = True
+    f _ = False
+
 access1 :: Indexable a => a -> Gamma -> Maybe (Gamma, GammaIndex, Gamma)
 access1 gi gs = case DL.elemIndex (index gi) gs of
   (Just 0) -> Just ([], head gs, tail gs)
@@ -313,7 +328,7 @@ access2 lgi rgi gs
 ann :: Expr -> Type -> Expr
 ann (AnnE e _) t = AnnE e t 
 ann e@(Declaration _ _) _ = e
-ann e@(Signature _ _ _) _ = e
+ann e@(Signature _ _) _ = e
 ann e t = AnnE e t
 
 generalize :: Type -> Type
@@ -381,7 +396,7 @@ instance Indexable Type where
   index _ = error "Can only index ExistT"
 
 instance Indexable Expr where
-  index (AnnE x t) = AnnG x (RichType t emptyTypeExtension)
+  index (AnnE x t) = AnnG x (RichType (Just t) emptyTypeExtension)
   index _ = error "Can only index AnnE"
 
 typeStyle = SetAnsiStyle {
@@ -426,27 +441,20 @@ prettyExpr (LogE x) = pretty x
 prettyExpr (Declaration (EV v) e) = pretty v <+> "=" <+> prettyExpr e
 prettyExpr (ListE xs) = list (map prettyExpr xs)
 prettyExpr (TupleE xs) = tupled (map prettyExpr xs)
-prettyExpr (Signature _ Nothing _) = error "Cannot pretty print signatures with no general type"
-prettyExpr (Signature (EV v) (Just t) ext)
+prettyExpr (Signature _ (RichType Nothing _)) = error "Cannot print signatures with no general type"
+prettyExpr (Signature (EV v) (RichType (Just t) ext))
   = pretty v
   <+> "::" <> props'
   <+> prettyGreenType t
   <> cons'
-  <> realizations'
   where
-    props' = tupled (map prettyProperty (properties ext))
-    cons' = case constraints ext of 
+    props' = tupled (map prettyProperty (Set.toList $ properties ext))
+    cons' = case Set.toList (constraints ext) of 
       [] -> ""
       ((Con c):cs) -> " where {" <> line
              <> "    , " <> pretty c <> line
              <> vsep (map (\c' -> "    " <> pretty c') [c' | (Con c') <- cs]) <> line
              <> "}"
-    realizations'
-      = vsep
-      . Map.elems
-      $ Map.mapWithKey
-        (\(Lang l) (t', _, _) -> "    " <> pretty v <+> pretty l <+> "::" <+> prettyGreenType t')
-        (realizations ext)
 
 prettyProperty :: Property -> Doc ann
 prettyProperty Pack = "pack"
@@ -490,7 +498,7 @@ instance Describable Expr where
   desc (LogE x) = "LogE:" ++ show x
   desc (StrE x) = "StrE:" ++ show x
   desc (Declaration (EV e) _) = "Declaration:" ++ T.unpack e
-  desc (Signature (EV e) _ _) = "Signature:" ++ T.unpack e
+  desc (Signature (EV e) _) = "Signature:" ++ T.unpack e
 
 instance Describable Type where
   desc (UniT) = "UniT"

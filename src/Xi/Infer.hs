@@ -19,10 +19,10 @@ import Control.Monad (replicateM, foldM)
 import qualified Data.Text as T
 import qualified Data.Set as Set
 import qualified Data.Map as Map
-import qualified Data.List as L
+import qualified Data.List as DL
 import qualified Data.List.Extra as LE
 
--- import Debug.Trace
+import Debug.Trace
 
 typecheck :: [Module] -> Stack [Module]
 typecheck ms = do
@@ -74,16 +74,18 @@ isRoot m k _ = not $ Map.foldr (isChild k) False m
 
 typecheckExpr :: Gamma -> [Expr] -> Stack (Gamma, [Expr])
 typecheckExpr g e = do
-  es <- fmap L.sort (mapM renameExpr e)
-  -- traceShowM es
+  es <- fmap DL.sort (mapM renameExpr e)
   (g', es') <- typecheckExpr' g [] es 
-  return $ (g', map (generalizeE . unrenameExpr . applyE g') (reverse es'))
+  let es'' = [Signature v t | (AnnG (VarE v) t) <- g'] ++ reverse es'
+  return $ (g', map (generalizeE . unrenameExpr . applyE g') es'')
 
 typecheckExpr' :: Gamma -> [Expr] -> [Expr] -> Stack (Gamma, [Expr])
 typecheckExpr' g es [] = return (g, es)
 typecheckExpr' g es (x:xs) = do
   (g', _, e') <- infer g x
-  typecheckExpr' g' (e':es) xs
+  case e' of
+    (Signature _ _) -> typecheckExpr' g' es xs
+    _ -> typecheckExpr' g' (e':es) xs
 
 renameExpr :: Expr -> Stack Expr
 renameExpr = mapT' renameType
@@ -350,6 +352,29 @@ applyConcrete e1 e2 t
   <> show' e2 <> "\n  > "
   <> show' t
 
+isAnnG :: EVar -> GammaIndex -> Bool
+isAnnG e1 (AnnG (VarE e2) _)
+  | e1 == e2 = True
+  | otherwise = False
+isAnnG _ _ = False
+
+joinSignature :: Gamma -> RichType -> RichType -> Stack RichType
+joinSignature g (RichType (Just t1) e1) (RichType (Just t2) e2) = do
+  subtype t1 t2 g
+  subtype t2 t1 g
+  RichType <$> pure (Just t1) <*> joinTypeExtensions e1 e2
+joinSignature g (RichType Nothing e1) (RichType t e2)
+  = RichType <$> pure t <*> joinTypeExtensions e1 e2 
+joinSignature g (RichType t e1) (RichType Nothing e2)
+  = RichType <$> pure t <*> joinTypeExtensions e1 e2
+
+joinTypeExtensions :: TypeExtension -> TypeExtension -> Stack TypeExtension 
+joinTypeExtensions e1 e2 = return $ TypeExtension {
+      properties = Set.union (properties e1) (properties e2)
+    , realizations = Map.unionWith Set.union (realizations e1) (realizations e2)
+    , constraints = Set.union (constraints e1) (constraints e2)
+  }
+
 infer
   :: Gamma
   -> Expr -- ^ A subexpression from the original expression
@@ -383,25 +408,28 @@ infer' g (Declaration v e) = do
   (g2, t1, e2) <- infer (g +> MarkEG v) e
   g3 <- cut (MarkEG v) g2
   (g4, t2, e3) <- case lookupE (VarE v) g of
-    (Just (RichType t _)) -> check g2 e2 t
+    (Just (RichType (Just t) _)) -> check g2 e2 t
+    (Just (RichType Nothing _)) -> throwError MissingAbstractType
     Nothing -> return (g3, t1, e2)
   let t3 = generalize t2
       g5 = g4 +> AnnG (VarE v) (enrich t3)
   return (g5, t3, Declaration v (generalizeE e3))
 -- Signature=>
--- TODO: add support for extensions and realizations
-infer' g (Signature v (Just t) ext)
-  = return (g +> AnnG (VarE v) (RichType t ext), t, Signature v (Just t) ext)
-infer' g (Signature v Nothing ext)
-  = throwError NotImplemented
-
+infer' g s1@(Signature v r1) = do
+  (left, r3, right) <- case DL.findIndex (isAnnG v) g of
+    (Just i) -> case (i, g !! i) of
+      (0, AnnG _ r2) -> joinSignature g r1 r2 >>= (\x -> return ([], x, tail g))
+      (i, AnnG _ r2) -> joinSignature g r1 r2 >>= (\x -> return (take i g, x, drop (i+1) g))
+    _ -> return (g, r1, [])
+  return (left ++ (AnnG (VarE v) r3):right, UniT, Signature v r3)
 
 --  (x:A) in g
 -- ------------------------------------------- Var
 --  g |- x => A -| g
 infer' g e@(VarE v) = do
   case lookupE e g of
-    (Just (RichType t _)) -> return (g, t, ann e t)
+    (Just (RichType (Just t) _)) -> return (g, t, ann e t)
+    (Just (RichType Nothing _)) -> throwError MissingAbstractType
     Nothing -> throwError (UnboundVariable v)
 
 --  g1,Ea,Eb,x:Ea |- e <= Eb -| g2,x:Ea,g3
@@ -414,10 +442,11 @@ infer' g1 (LamE v e2) = do
       g2 = g1 +> a +> b +> anng
   (g3, t, e2') <- check g2 e2 b
   case lookupE (VarE v) g3 of
-    (Just (RichType a' _)) -> do
+    (Just (RichType (Just a') _)) -> do
       let t' = FunT (apply g3 a') t
       g4 <- cut anng g3
       return (g4, t', ann (LamE v e2') t')
+    (Just (RichType Nothing _)) -> throwError MissingAbstractType
     Nothing -> throwError UnknownError
 
 --  g1 |- e1 => A -| g2
