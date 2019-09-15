@@ -32,19 +32,18 @@ module Xi.Data
   , prettyModule
   , prettyType
   , desc
+  , toType
+  , fromType
   -- * ModuleGamma paraphernalia
   , ModularGamma
   , importFromModularGamma
   , extendModularGamma
   -- * Type extensions
-  , RichType(..)
-  , enrich
+  , EType(..)
+  , TypeSet(..)
   , Property(..)
   , Constraint(..)
   , Language(..)
-  , TypeExtension(..)
-  , Realization(..)
-  , emptyTypeExtension
 ) where
 
 import qualified Data.List as DL
@@ -97,7 +96,7 @@ data StackConfig = StackConfig {
 data GammaIndex
   = VarG TVar
   -- ^ (G,a)
-  | AnnG Expr RichType
+  | AnnG Expr TypeSet
   -- ^ (G,x:A) looked up in the (Var) and cut in (-->I)
   | ExistG TVar
   -- ^ (G,a^) unsolved existential variable
@@ -117,7 +116,7 @@ data Module = Module {
 
 -- | Terms, see Dunfield Figure 1
 data Expr
-  = Signature EVar RichType
+  = Signature EVar EType
   -- ^ x :: A; e
   | Declaration EVar Expr
   -- ^ x=e1; e2
@@ -171,20 +170,16 @@ newtype Constraint = Con T.Text deriving(Show, Eq, Ord)
 -- leave it as general text.
 newtype Language = Lang T.Text deriving(Show, Eq, Ord)
 
-data Realization = Realization Type [Property] [Constraint] deriving(Show, Eq, Ord)
-
-data TypeExtension = TypeExtension {
-    properties :: Set.Set Property
-  , realizations :: Map.Map Language (Set.Set Realization)
-  , constraints :: Set.Set Constraint
+-- | Extended Type that may represent a language specific type as well as sets
+-- of properties and constrains.
+data EType = EType {
+    etype :: Type
+  , elang :: Maybe Language
+  , eprop :: Set.Set Property
+  , econs :: Set.Set Constraint
 } deriving(Show, Eq, Ord)
 
-emptyTypeExtension :: TypeExtension
-emptyTypeExtension = TypeExtension {
-    properties = Set.empty
-  , realizations = Map.empty
-  , constraints = Set.empty
-}
+data TypeSet = TypeSet (Maybe EType) [EType] deriving(Show, Eq, Ord)
 
 data TypeError
   = UnknownError
@@ -210,20 +205,44 @@ data TypeError
   | CyclicDependency
   | CannotImportMain
   | SelfImport MVar
+  | BadRealization
   -- type extension errors
   | AmbiguousPacker TVar
   | AmbiguousUnpacker TVar
   | AmbiguousCast TVar TVar
   | IncompatibleRealization MVar
   | MissingAbstractType
+  | ExpectedAbstractType
   deriving(Show, Ord, Eq)
 
-type ModularGamma = Map.Map MVar (Map.Map EVar RichType)
+type ModularGamma = Map.Map MVar (Map.Map EVar TypeSet)
 
-data RichType = RichType (Maybe Type) TypeExtension deriving(Show, Ord, Eq)
+class Typed a where
+  toType :: a -> Maybe Type
+  fromType :: Type -> a
+  
+instance Typed EType where
+  toType e = case elang e of 
+    (Just _) -> Nothing
+    Nothing -> Just (etype e)
 
-enrich :: Type -> RichType
-enrich t = RichType (Just t) emptyTypeExtension
+  fromType t = EType
+    { etype = t
+    , elang = Nothing
+    , eprop = Set.empty
+    , econs = Set.empty
+    }  
+
+instance Typed TypeSet where
+  toType (TypeSet (Just e) _) = toType e
+  toType (TypeSet Nothing _) = Nothing
+
+  fromType t = TypeSet (Just (fromType t)) []
+
+instance Typed Type where
+  toType = Just
+  fromType = id
+
 
 importFromModularGamma :: ModularGamma -> Module -> Stack Gamma
 importFromModularGamma g m = mapM lookupImport (moduleImports m) where
@@ -259,7 +278,7 @@ mapT f (TupleE es) = TupleE (map (mapT f) es)
 mapT f (AppE e1 e2) = AppE (mapT f e1) (mapT f e2)
 mapT f (AnnE e t) = AnnE (mapT f e) (f t)
 mapT f (Declaration v e) = Declaration v (mapT f e)
-mapT f (Signature v (RichType t ext)) = Signature v (RichType (fmap f t) ext)
+mapT f (Signature v e) = Signature v $ e {etype = f (etype e)}
 mapT _ e = e
 
 mapT' :: Monad m => (Type -> m Type) -> Expr -> m Expr
@@ -269,9 +288,9 @@ mapT' f (TupleE es) = TupleE <$> mapM (mapT' f) es
 mapT' f (AppE e1 e2) = AppE <$> mapT' f e1 <*> mapT' f e2
 mapT' f (AnnE e t) = AnnE <$> mapT' f e <*> f t
 mapT' f (Declaration v e) = Declaration <$> pure v <*> mapT' f e
-mapT' f (Signature v (RichType t ext))
-  =   Signature <$> pure v
-  <*> (RichType <$> sequence (fmap f t) <*> pure ext)
+mapT' f (Signature v e) = do
+  t' <- f (etype e) 
+  return $ Signature v (e {etype = t'})
 mapT' _ e = return e
 
 (+>) :: Indexable a => Gamma -> a -> Gamma
@@ -285,7 +304,7 @@ cut i (x:xs)
   | otherwise = cut i xs
 
 -- | Look up a type annotated expression
-lookupE :: Expr -> Gamma -> Maybe RichType
+lookupE :: Expr -> Gamma -> Maybe TypeSet
 lookupE _ [] = Nothing
 lookupE e ((AnnG e' t):gs)
   | e == e' = Just t
@@ -299,15 +318,6 @@ lookupT v ((SolvedG v' t):gs)
   | v == v' = Just t
   | otherwise = lookupT v gs
 lookupT v (_:gs) = lookupT v gs
-
-lookupE' :: Expr -> Gamma -> Maybe (Gamma, GammaIndex, Gamma)
-lookupE' e gs = case DL.findIndex f gs of
-  (Just 0) -> Just ([], head gs, tail gs)
-  (Just i) -> Just (take i gs, gs !! i, drop (i+1) gs)
-  _ -> Nothing
-  where
-    f (AnnG e _) = True
-    f _ = False
 
 access1 :: Indexable a => a -> Gamma -> Maybe (Gamma, GammaIndex, Gamma)
 access1 gi gs = case DL.elemIndex (index gi) gs of
@@ -396,7 +406,7 @@ instance Indexable Type where
   index _ = error "Can only index ExistT"
 
 instance Indexable Expr where
-  index (AnnE x t) = AnnG x (RichType (Just t) emptyTypeExtension)
+  index (AnnE x t) = AnnG x (fromType t)
   index _ = error "Can only index AnnE"
 
 typeStyle = SetAnsiStyle {
@@ -441,20 +451,22 @@ prettyExpr (LogE x) = pretty x
 prettyExpr (Declaration (EV v) e) = pretty v <+> "=" <+> prettyExpr e
 prettyExpr (ListE xs) = list (map prettyExpr xs)
 prettyExpr (TupleE xs) = tupled (map prettyExpr xs)
-prettyExpr (Signature _ (RichType Nothing _)) = error "Cannot print signatures with no general type"
-prettyExpr (Signature (EV v) (RichType (Just t) ext))
-  = pretty v
-  <+> "::" <> props'
-  <+> prettyGreenType t
-  <> cons'
-  where
-    props' = tupled (map prettyProperty (Set.toList $ properties ext))
-    cons' = case Set.toList (constraints ext) of 
-      [] -> ""
-      ((Con c):cs) -> " where {" <> line
-             <> "    , " <> pretty c <> line
-             <> vsep (map (\c' -> "    " <> pretty c') [c' | (Con c') <- cs]) <> line
-             <> "}"
+prettyExpr (Signature (EV v) e) = pretty v <+> elang' <> "::" <+> eprop' <> etype' <> econs' where 
+  elang' :: Doc AnsiStyle
+  elang' = maybe "" (\(Lang x) -> pretty x <> " ") (elang e)
+
+  eprop' :: Doc AnsiStyle
+  eprop' = case Set.toList (eprop e) of
+    [] -> ""
+    xs -> tupled (map prettyProperty xs) <+> "=> "
+
+  etype' :: Doc AnsiStyle
+  etype' = prettyGreenType (etype e)
+
+  econs' :: Doc AnsiStyle
+  econs' = case Set.toList (econs e) of
+    [] -> ""
+    xs -> " where" <+> tupled (map (\(Con x) -> pretty x) xs)
 
 prettyProperty :: Property -> Doc ann
 prettyProperty Pack = "pack"

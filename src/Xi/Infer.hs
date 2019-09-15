@@ -71,13 +71,16 @@ isRoot m k _ = not $ Map.foldr (isChild k) False m
     isChild _ _ True = True 
     isChild k s False = Set.member k s
 
-
 typecheckExpr :: Gamma -> [Expr] -> Stack (Gamma, [Expr])
 typecheckExpr g e = do
   es <- fmap DL.sort (mapM renameExpr e)
   (g', es') <- typecheckExpr' g [] es 
-  let es'' = [Signature v t | (AnnG (VarE v) t) <- g'] ++ reverse es'
+  let es'' = concat [toExpr v t | (AnnG (VarE v) t) <- g'] ++ reverse es'
   return $ (g', map (generalizeE . unrenameExpr . applyE g') es'')
+
+toExpr :: EVar -> TypeSet -> [Expr]
+toExpr v (TypeSet (Just e) es) = [Signature v t | t <- (e:es)]
+toExpr v (TypeSet Nothing es) = [Signature v t | t <- es]
 
 typecheckExpr' :: Gamma -> [Expr] -> [Expr] -> Stack (Gamma, [Expr])
 typecheckExpr' g es [] = return (g, es)
@@ -158,7 +161,7 @@ applyE g e = mapT (apply g) e
 occursCheck :: Type -> Type -> Stack()
 occursCheck t1 t2 = case Set.member t1 (free t2) of
   True -> throwError OccursCheckFail
-  False -> return()
+  False -> return ()
 
 free :: Type -> Set.Set Type
 free UniT = Set.empty
@@ -358,22 +361,35 @@ isAnnG e1 (AnnG (VarE e2) _)
   | otherwise = False
 isAnnG _ _ = False
 
-joinSignature :: Gamma -> RichType -> RichType -> Stack RichType
-joinSignature g (RichType (Just t1) e1) (RichType (Just t2) e2) = do
-  subtype t1 t2 g
-  subtype t2 t1 g
-  RichType <$> pure (Just t1) <*> joinTypeExtensions e1 e2
-joinSignature g (RichType Nothing e1) (RichType t e2)
-  = RichType <$> pure t <*> joinTypeExtensions e1 e2 
-joinSignature g (RichType t e1) (RichType Nothing e2)
-  = RichType <$> pure t <*> joinTypeExtensions e1 e2
+appendTypeSet :: EType -> TypeSet -> Stack TypeSet
 
-joinTypeExtensions :: TypeExtension -> TypeExtension -> Stack TypeExtension 
-joinTypeExtensions e1 e2 = return $ TypeExtension {
-      properties = Set.union (properties e1) (properties e2)
-    , realizations = Map.unionWith Set.union (realizations e1) (realizations e2)
-    , constraints = Set.union (constraints e1) (constraints e2)
-  }
+appendTypeSet e (TypeSet Nothing rs) = do
+  mapM_ (checkRealization e) rs
+  return $ TypeSet (Just e) rs
+appendTypeSet e1@(EType _ (Just _) _ _) (TypeSet (Just e2) rs) = do
+  checkRealization e2 e1
+  return $ TypeSet (Just e2) (e1:rs)
+appendTypeSet e1@(EType _ Nothing _ _) (TypeSet (Just e2) rs) = do
+  subtype (etype e1) (etype e2) [] 
+  subtype (etype e2) (etype e1) []
+  let e3 = EType { 
+      elang = Nothing
+    , etype = etype e2
+    , eprop = Set.union (eprop e1) (eprop e2)
+    , econs = Set.union (econs e1) (econs e2)
+    }
+  return $ TypeSet (Just e3) rs 
+
+checkRealization :: EType -> EType -> Stack ()
+checkRealization e1 e2 = f' (etype e1) (etype e2) where
+  f' :: Type -> Type -> Stack ()
+  f' (FunT x1 y1) (FunT x2 y2) = f' x1 x2 >> f' y1 y2 
+  f' (FunT _ _) _ = throwError BadRealization
+  f' _ (FunT _ _) = throwError BadRealization
+  f' (Forall _ x) (Forall _ y) = f' x y
+  f' (Forall _ x) y            = f' x y
+  f' x            (Forall _ y) = f' x y
+  f' _ _ = return ()
 
 infer
   :: Gamma
@@ -407,29 +423,30 @@ infer' g e@(LogE _) = return (g, t, ann e t) where
 infer' g (Declaration v e) = do
   (g2, t1, e2) <- infer (g +> MarkEG v) e
   g3 <- cut (MarkEG v) g2
-  (g4, t2, e3) <- case lookupE (VarE v) g of
-    (Just (RichType (Just t) _)) -> check g2 e2 t
-    (Just (RichType Nothing _)) -> throwError MissingAbstractType
+  (g4, t2, e3) <- case lookupE (VarE v) g >>= toType of
+    (Just t) -> check g2 e2 t
     Nothing -> return (g3, t1, e2)
   let t3 = generalize t2
-      g5 = g4 +> AnnG (VarE v) (enrich t3)
+      g5 = g4 +> AnnG (VarE v) (fromType t3)
   return (g5, t3, Declaration v (generalizeE e3))
+
 -- Signature=>
-infer' g s1@(Signature v r1) = do
+infer' g s1@(Signature v e) = do
   (left, r3, right) <- case DL.findIndex (isAnnG v) g of
     (Just i) -> case (i, g !! i) of
-      (0, AnnG _ r2) -> joinSignature g r1 r2 >>= (\x -> return ([], x, tail g))
-      (i, AnnG _ r2) -> joinSignature g r1 r2 >>= (\x -> return (take i g, x, drop (i+1) g))
-    _ -> return (g, r1, [])
-  return (left ++ (AnnG (VarE v) r3):right, UniT, Signature v r3)
+      (0, AnnG _ r2) -> appendTypeSet e r2 >>= (\x -> return ([], x, tail g))
+      (i, AnnG _ r2) -> appendTypeSet e r2 >>= (\x -> return (take i g, x, drop (i+1) g))
+    _ -> case elang e of
+      (Just _) -> return (g, TypeSet Nothing [e], [])
+      Nothing -> return (g, TypeSet (Just e) [], [])
+  return (left ++ (AnnG (VarE v) r3):right, UniT, Signature v e)
 
 --  (x:A) in g
 -- ------------------------------------------- Var
 --  g |- x => A -| g
 infer' g e@(VarE v) = do
-  case lookupE e g of
-    (Just (RichType (Just t) _)) -> return (g, t, ann e t)
-    (Just (RichType Nothing _)) -> throwError MissingAbstractType
+  case lookupE e g >>= toType of
+    (Just t) -> return (g, t, ann e t) 
     Nothing -> throwError (UnboundVariable v)
 
 --  g1,Ea,Eb,x:Ea |- e <= Eb -| g2,x:Ea,g3
@@ -438,15 +455,14 @@ infer' g e@(VarE v) = do
 infer' g1 (LamE v e2) = do
   a <- newvar
   b <- newvar
-  let anng = AnnG (VarE v) (enrich a)
+  let anng = AnnG (VarE v) (fromType a)
       g2 = g1 +> a +> b +> anng
-  (g3, t, e2') <- check g2 e2 b
-  case lookupE (VarE v) g3 of
-    (Just (RichType (Just a') _)) -> do
-      let t' = FunT (apply g3 a') t
+  (g3, t1, e2') <- check g2 e2 b
+  case lookupE (VarE v) g3 >>= toType of
+    (Just t2) -> do
+      let t3 = FunT (apply g3 t2) t1
       g4 <- cut anng g3
-      return (g4, t', ann (LamE v e2') t')
-    (Just (RichType Nothing _)) -> throwError MissingAbstractType
+      return (g4, t3, ann (LamE v e2') t3)
     Nothing -> throwError UnknownError
 
 --  g1 |- e1 => A -| g2
@@ -529,7 +545,7 @@ check' _ _ UniT = throwError TypeMismatch
 --  g1 |- \x.e <= A -> B -| g2
 check' g (LamE v e) (FunT a b) = do
   -- define x:A
-  let anng = AnnG (VarE v) (enrich a)
+  let anng = AnnG (VarE v) (fromType a)
   -- check that e has the expected output type
   (g', t', e') <- check (g +> anng) e b
   -- ignore the trailing context and (x:A), since it is out of scope

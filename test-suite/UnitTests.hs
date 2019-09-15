@@ -20,8 +20,9 @@ main (m:ms)
 -- get the toplevel type of a fully annotated expression
 typeof :: [Expr] -> Type
 typeof es = typeof' . head . reverse $ es where
-  typeof' (Signature _ (RichType (Just t) _)) = t
-  typeof' t@(Signature _ (RichType Nothing _)) = error $ "No general type found for: " <> show t
+  typeof' (Signature _ e) = case toType e of
+    (Just t) -> t
+    Nothing -> error $ "No general type found for: " <> show e
   typeof' (AnnE _ t) = t
   typeof' (AppE _ t) = typeof' t
   typeof' t = error ("No annotation found for: " <> show t)
