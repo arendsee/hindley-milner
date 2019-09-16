@@ -193,6 +193,48 @@ unitTests = testGroup "Unit tests"
         [ "module Foo {x = 42};"
         , "module Main {import Foo (x); x}"
         ]
+    -- test realization integration -------------------------------------------
+    , (flip exprTestGood) int $ T.unlines
+        [ "f :: Int -> Int;"
+        , "f r :: integer -> integer;"
+        , "f 44"
+        ]
+    -- This looks bad, but for now I allow it. I may add more strictness later 
+    , (flip exprTestGood) int $ T.unlines
+        [ "f :: Int -> Int;"
+        , "f r :: integer -> string;" 
+        , "f c :: int -> int;"
+        , "f 44"
+        ]
+    -- can also have more than one realization for a given language
+    , (flip exprTestGood) int $ T.unlines
+        [ "f :: Int -> Int;"
+        , "f r :: integer -> string;" 
+        , "f r :: int -> int;"
+        , "f 44"
+        ]
+    -- but the number of arguments must be conserved
+    , (flip expectError) BadRealization $ T.unlines
+        [ "f :: Int -> String -> Int;"
+        , "f r :: integer -> integer;"
+        , "f 44"
+        ]
+    -- the general type must be declared
+    , (flip expectError) (UnboundVariable (EV "f")) $ T.unlines
+        [ "f r :: integer -> integer;"
+        , "f 44"
+        ]
+    -- no general type signature is required if it can be inferred
+    , (flip exprTestGood) int $ T.unlines
+        [ "f r :: integer -> integer;"
+        , "f = \\x -> 42;"
+        , "f 44"
+        ]
+    , (flip expectError) (BadRealization) $ T.unlines
+        [ "f   :: Int -> Int;"
+        , "f r :: integer -> integer -> string;"
+        , "f 44"
+        ]
     -- internal ---------------------------------------------------------------
     , exprTestFull "f :: forall a . a -> Bool; f 42"
                    "f :: forall a . a -> Bool; (((f :: Int -> Bool) (42 :: Int)) :: Bool)"
