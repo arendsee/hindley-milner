@@ -12,14 +12,23 @@ import qualified Data.Scientific as DS
 
 type Parser = Parsec Void T.Text
 
+readProgram :: T.Text -> [Module]
+readProgram s = case parse (sc >> pProgram <* eof) "" s of 
+      Left err -> error (show err)
+      Right es -> es
+
 many1 :: Parser a -> Parser [a]
 many1 p = do
   x <- p
   xs <- many p
   return (x:xs)
 
+-- sc stands for space consumer
 sc :: Parser ()
-sc = L.space space1 empty empty
+sc = L.space space1 lineComment blockComment
+  where
+    lineComment  = L.skipLineComment "--"
+    blockComment = L.skipBlockComment "{-" "-}"
 
 symbol = L.symbol sc
 
@@ -62,11 +71,6 @@ name = (lexeme . try) (p >>= check)
     check x = if elem x reservedWords
                 then failure Nothing Set.empty -- TODO: error message
                 else return x
-
-readProgram :: T.Text -> [Module]
-readProgram s = case parse (space >> pProgram <* eof) "" s of 
-      Left err -> error (show err)
-      Right es -> es
 
 data Toplevel
   = TModule Module

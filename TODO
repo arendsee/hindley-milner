@@ -4,7 +4,7 @@
         `source <lang> from <file> (<import-list>)`
  [x] allow scientific numbers
  [x] allow quotation of type names (needed for realizations)
- [ ] allow comments
+ [x] allow comments
  [ ] add module namespaces
  [ ] manage serialization
  [ ] add label syntax in type signatures
@@ -13,6 +13,14 @@
      This function both finds the file (searching locally or across databases)
      and opens the file.
  [ ] transform expressions into a graph of Manifold objects
+
+* QC coverage
+ [ ] generate realization type signatures
+ [ ] generate record types
+ [ ] generate record expressions
+ [ ] generate modules
+ [ ] generate import/export
+ [ ] generate scientific numbers
 
 * beyond current morloc capabilities
  [ ] record access

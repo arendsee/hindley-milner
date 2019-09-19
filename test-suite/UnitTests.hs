@@ -82,8 +82,12 @@ record rs = RecT (map (\(x,t)->(TV x, t)) rs)
 
 unitTests = testGroup "Unit tests"
   [
+    -- comments
+      exprTestGood "block comments (1)" "{- -} 42" num
+    , exprTestGood "block comments (2)" " {--} 42{-   foo -} " num
+    , exprTestGood "line comments (3)" "-- foo\n 42" num
     -- primitives
-      exprTestGood "primitive integer" "42" num
+    , exprTestGood "primitive integer" "42" num
     , exprTestGood "primitive big integer" "123456789123456789123456789" num
     , exprTestGood "primitive decimal" "4.2" num
     , exprTestGood "primitive negative number" "-4.2" num
