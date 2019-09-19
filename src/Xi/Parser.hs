@@ -8,6 +8,7 @@ import qualified Data.Text as T
 import Data.Void (Void)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Data.Scientific as DS
 
 type Parser = Parsec Void T.Text
 
@@ -26,11 +27,8 @@ symbol = L.symbol sc
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
-integer :: Parser Integer
-integer = lexeme $ L.signed sc L.decimal
-
-number :: Parser Double
-number = lexeme $ L.signed sc L.float
+number :: Parser DS.Scientific
+number = lexeme $ L.signed sc L.scientific -- `empty` because no space is allowed
 
 parens :: Parser a -> Parser a
 parens p = lexeme $ between (symbol "(") (symbol ")") p
@@ -196,7 +194,6 @@ pExpr
   <|> try pStrE
   <|> try pLogE
   <|> try pNumE
-  <|> try pIntE
   <|> pListE
   <|> parens pExpr
   <|> pLam
@@ -229,7 +226,7 @@ pUni = symbol "UNIT" >> return UniE
 
 pAnn :: Parser Expr
 pAnn = do
-  e <- parens pExpr <|> pVar <|> pListE <|> try pNumE <|> pIntE <|> pLogE <|> pStrE
+  e <- parens pExpr <|> pVar <|> pListE <|> try pNumE <|> pLogE <|> pStrE
   _ <- symbol "::"
   t <- pType
   return $ AnnE e t
@@ -246,12 +243,8 @@ pApp = do
       <|> try pStrE
       <|> try pLogE
       <|> try pNumE
-      <|> try pIntE
       <|> pListE
       <|> pVar
-
-pIntE :: Parser Expr
-pIntE = fmap IntE integer
 
 pLogE :: Parser Expr
 pLogE = pTrue <|> pFalse

@@ -60,6 +60,7 @@ import qualified Data.Map as Map
 import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.Terminal
 import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
+import qualified Data.Scientific as DS
 
 type GeneralStack c e l s a = MR.ReaderT c (ME.ExceptT e (MW.WriterT l (MS.StateT s MI.Identity))) a
 type Stack a = GeneralStack StackConfig TypeError [T.Text] StackState a
@@ -134,7 +135,7 @@ data Expr
   -- ^ (e e)
   | AnnE Expr Type
   -- ^ (e : A)
-  | IntE Integer | NumE Double | LogE Bool | StrE T.Text 
+  | NumE DS.Scientific | LogE Bool | StrE T.Text 
   -- ^ primitives
   | RecE [(EVar, Expr)]
   deriving(Show, Ord, Eq)
@@ -452,8 +453,7 @@ prettyExpr (LamE (EV n) e) = "\\" <> pretty n <+> "->" <+> prettyExpr e
 prettyExpr (AnnE e t) = parens (prettyExpr e <+> "::" <+> prettyGreenType t)
 prettyExpr (AppE e1@(LamE _ _) e2) = parens (prettyExpr e1) <+> prettyExpr e2
 prettyExpr (AppE e1 e2) = prettyExpr e1 <+> prettyExpr e2
-prettyExpr (IntE x) = pretty x
-prettyExpr (NumE x) = pretty x
+prettyExpr (NumE x) = pretty (show x)
 prettyExpr (StrE x) = dquotes (pretty x)
 prettyExpr (LogE x) = pretty x
 prettyExpr (Declaration (EV v) e) = pretty v <+> "=" <+> prettyExpr e
@@ -515,7 +515,6 @@ instance Describable Expr where
   desc (LamE (EV v) _) = "LamE:" ++ T.unpack v
   desc (AppE e1 e2) = "AppE (" ++ desc e1 ++ ") (" ++ desc e2 ++ ")"
   desc (AnnE e _) = "AnnE (" ++ desc e ++ ")"
-  desc (IntE x) = "IntE:" ++ show x
   desc (NumE x) = "NumE:" ++ show x
   desc (LogE x) = "LogE:" ++ show x
   desc (StrE x) = "StrE:" ++ show x

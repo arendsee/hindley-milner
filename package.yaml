@@ -21,6 +21,7 @@ dependencies:
 - prettyprinter
 - prettyprinter-ansi-terminal
 - extra
+- scientific
 
 default-extensions:
   - OverloadedStrings

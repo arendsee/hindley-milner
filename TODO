@@ -2,7 +2,7 @@
  [x] records
  [ ] language-specific source
         `source <lang> from <file> (<import-list>)`
- [ ] allow scientific numbers
+ [x] allow scientific numbers
  [ ] allow quotation of type names (needed for realizations)
  [ ] allow comments
  [ ] add module namespaces
