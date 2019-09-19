@@ -48,6 +48,13 @@ reservedWords = ["module", "where", "import", "export", "as", "True", "False"]
 reserved :: T.Text -> Parser T.Text
 reserved w = try (symbol w)
 
+stringLiteral :: Parser T.Text
+stringLiteral = do
+  _ <- symbol "\""
+  s <- many (noneOf ['"'])
+  _ <- symbol "\""
+  return $ T.pack s
+
 name :: Parser T.Text
 name = (lexeme . try) (p >>= check)
   where
@@ -254,10 +261,8 @@ pLogE = pTrue <|> pFalse
 
 pStrE :: Parser Expr
 pStrE = do
-  _ <- symbol "\""
-  s <- many (noneOf ['"'])
-  _ <- symbol "\""
-  return (StrE (T.pack s))
+  s <- stringLiteral
+  return (StrE s)
 
 pNumE :: Parser Expr
 pNumE = fmap NumE number
@@ -326,7 +331,9 @@ pListT :: Parser Type
 pListT = fmap (\x -> ArrT (TV "List") [x]) (brackets pType)
 
 pVarT :: Parser Type
-pVarT = fmap (VarT . TV) name
+pVarT = do
+  n <- name <|> stringLiteral
+  return $ VarT (TV n)
 
 pForAllT :: Parser Type
 pForAllT = do

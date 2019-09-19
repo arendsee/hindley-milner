@@ -377,23 +377,26 @@ isAnnG e1 (AnnG (VarE e2) _)
 isAnnG _ _ = False
 
 appendTypeSet :: EType -> TypeSet -> Stack TypeSet
-
-appendTypeSet e (TypeSet Nothing rs) = do
-  mapM_ (checkRealization e) rs
-  return $ TypeSet (Just e) rs
-appendTypeSet e1@(EType _ (Just _) _ _) (TypeSet (Just e2) rs) = do
-  checkRealization e2 e1
-  return $ TypeSet (Just e2) (e1:rs)
-appendTypeSet e1@(EType _ Nothing _ _) (TypeSet (Just e2) rs) = do
-  subtype (etype e1) (etype e2) [] 
-  subtype (etype e2) (etype e1) []
-  let e3 = EType { 
-      elang = Nothing
-    , etype = etype e2
-    , eprop = Set.union (eprop e1) (eprop e2)
-    , econs = Set.union (econs e1) (econs e2)
-    }
-  return $ TypeSet (Just e3) rs 
+appendTypeSet e1 s = case (elang e1, s) of
+  -- if e is a general type, and there is no conflicting type, then set e
+  (Nothing, TypeSet Nothing rs) -> do
+    mapM_ (checkRealization e1) rs
+    return $ TypeSet (Just e1) rs
+  -- if e is a realization, and no general type is set, just add e to the list
+  (Just _, TypeSet Nothing rs) -> return $ TypeSet Nothing (e1:rs)
+  -- if e is a realization, and a general type exists, append it and check
+  (Just _, TypeSet (Just e2) rs) -> do
+    checkRealization e2 e1
+    return $ TypeSet (Just e2) (e1:rs)
+  -- if e is general, and a general type exists, merge the general types
+  (Nothing, TypeSet (Just e2) rs) -> do
+    let e3 = EType { 
+        elang = Nothing
+      , etype = etype e2
+      , eprop = Set.union (eprop e1) (eprop e2)
+      , econs = Set.union (econs e1) (econs e2)
+      }
+    return $ TypeSet (Just e3) rs 
 
 checkRealization :: EType -> EType -> Stack ()
 checkRealization e1 e2 = f' (etype e1) (etype e2) where

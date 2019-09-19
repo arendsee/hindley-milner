@@ -239,6 +239,18 @@ unitTests = testGroup "Unit tests"
         , "f c :: int -> int;"
         , "f 44"
         ]
+    , (flip $ exprTestGood "realizations with parameterized variables") num $ T.unlines
+        [ "f :: [Num] -> Num;"
+        , "f r :: integer -> integer;"
+        , "f c :: int -> int;"
+        , "f [44]"
+        ]
+    , (flip $ exprTestGood "realizations can use quoted variables") num $ T.unlines
+        [ "sum :: Num -> Num;"
+        , "sum c :: \"double*\" -> double;"
+        , "sum cpp :: \"std::vector<double>\" -> double;"
+        , "sum 12"
+        ]
     , (flip $ exprTestGood "the order of general signatures and realizations does not matter (1)") num $ T.unlines
         [ "f r :: integer -> integer;"
         , "f :: Num -> Num;"

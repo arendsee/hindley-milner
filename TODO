@@ -3,7 +3,7 @@
  [ ] language-specific source
         `source <lang> from <file> (<import-list>)`
  [x] allow scientific numbers
- [ ] allow quotation of type names (needed for realizations)
+ [x] allow quotation of type names (needed for realizations)
  [ ] allow comments
  [ ] add module namespaces
  [ ] manage serialization
