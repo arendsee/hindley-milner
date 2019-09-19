@@ -459,7 +459,7 @@ prettyExpr (LogE x) = pretty x
 prettyExpr (Declaration (EV v) e) = pretty v <+> "=" <+> prettyExpr e
 prettyExpr (ListE xs) = list (map prettyExpr xs)
 prettyExpr (TupleE xs) = tupled (map prettyExpr xs)
-prettyExpr (RecE entries) = encloseSep "{" "}" "," (map (\(EV v,e) -> pretty v <+> "=" <+> prettyExpr e) entries)
+prettyExpr (RecE entries) = encloseSep "{" "}" ", " (map (\(EV v,e) -> pretty v <+> "=" <+> prettyExpr e) entries)
 prettyExpr (Signature (EV v) e) = pretty v <+> elang' <> "::" <+> eprop' <> etype' <> econs' where 
   elang' :: Doc AnsiStyle
   elang' = maybe "" (\(Lang x) -> pretty x <> " ") (elang e)
@@ -502,7 +502,7 @@ prettyType (FunT t1 t2) = prettyType t1 <+> "->" <+> prettyType t2
 prettyType t@(Forall _ _) = "forall" <+> hsep (forallVars t) <+> "." <+> forallBlock t
 prettyType (ExistT (TV e)) = "<" <> pretty e <> ">"
 prettyType (ArrT (TV v) ts) = pretty v <+> hsep (map prettyType ts)
-prettyType (RecT entries) = encloseSep "{" "}" "," (map (\(TV v,e) -> pretty v <+> "=" <+> prettyType e) entries)
+prettyType (RecT entries) = encloseSep "{" "}" ", " (map (\(TV v,e) -> pretty v <+> "=" <+> prettyType e) entries)
 
 class Describable a where
   desc :: a -> String

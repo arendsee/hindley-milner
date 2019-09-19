@@ -164,9 +164,13 @@ unitTests = testGroup "Unit tests"
     -- tuples
     , exprTestGood "tuple of primitives" "(4.2, True)" (arr "Tuple2" [num, bool])
     , exprTestGood "tuple containing an applied variable" "f :: forall a . a -> a; (f 53, True)" (tuple [int, bool])
-    -- record
+    -- records
     , exprTestGood "primitive record statement" "{x=42, y=\"yolo\"}" (record [("x", int), ("y", str)])
-    , exprTestGood "primitive record statement" "Foo :: {x :: Int, y :: Str}" (record [("x", int), ("y", str)])
+    , exprTestGood "primitive record signature" "Foo :: {x :: Int, y :: Str}" (record [("x", int), ("y", str)])
+    , exprTestGood "primitive record declaration" "foo = {x = 42, y = \"yolo\"}; foo" (record [("x", int), ("y", str)])
+    , exprTestGood "nested records" "Foo :: {x :: Int, y :: {bob :: Int, tod :: Str}}"
+                   (record [("x", int), ("y", record [("bob", int), ("tod", str)])])
+    , exprTestGood "records with variables" "a=42; b={x=a, y=\"yolo\"}; f=\\b->b; f b" (record [("x", int), ("y", str)])
     -- extra space
     , exprTestGood "leading space" " 42" int
     , exprTestGood "trailing space" "42 " int
