@@ -7,6 +7,8 @@ maintainer:          "zbwrnz@gmail.com"
 copyright:           "2019 Zebulun Arendsee"
 extra-source-files:
     - README.md
+    - TODO
+    - USAGE
 description:         Please see the README on GitHub at <https://github.com/arendsee/xi#readme>
 
 dependencies:

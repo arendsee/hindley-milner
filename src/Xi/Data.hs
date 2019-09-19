@@ -136,6 +136,7 @@ data Expr
   -- ^ (e : A)
   | IntE Integer | NumE Double | LogE Bool | StrE T.Text 
   -- ^ primitives
+  | RecE [(EVar, Expr)]
   deriving(Show, Ord, Eq)
 
 -- | Types, see Dunfield Figure 6
@@ -152,6 +153,8 @@ data Type
   -- ^ (A->B)
   | ArrT TVar [Type]
   -- ^ f [Type]
+  | RecT [(TVar, Type)]
+  -- ^ Foo { bar :: A, baz :: B }
   deriving(Show, Ord, Eq)
 
 data Property
@@ -194,10 +197,13 @@ data TypeError
   | TypeMismatch
   | UnexpectedPattern Expr Type
   | ToplevelRedefinition
-  | UnkindJackass -- this shouldn't be used at all
   | NoAnnotationFound -- I don't know what this is for
   | NotImplemented -- this should only be used as a placeholder
   | OtherError T.Text
+  -- container errors
+  | EmptyTuple
+  | TupleSingleton
+  | EmptyRecord
   -- module errors
   | MultipleModuleDeclarations MVar
   | BadImport MVar EVar
@@ -361,6 +367,7 @@ generalize t = generalize' existentialMap t where
   findExistentials (Forall v t') = Set.delete v (findExistentials t')
   findExistentials (FunT t1 t2) = Set.union (findExistentials t1) (findExistentials t2)
   findExistentials (ArrT _ ts) = Set.unions (map findExistentials ts)
+  findExistentials (RecT rs) = Set.unions (map (findExistentials . snd) rs)
 
   generalizeOne :: TVar -> TVar -> Type -> Type
   generalizeOne v0 r t0 = Forall r (f v0 t0) where
@@ -373,6 +380,7 @@ generalize t = generalize' existentialMap t where
       | v /= x = Forall x (f v t2)
       | otherwise = t1
     f v (ArrT v' xs) = ArrT v' (map (f v) xs)
+    f v (RecT xs) = RecT (map (\(v', t) -> (v', f v t)) xs)
     f _ t1 = t1
 
 generalizeE :: Expr -> Expr
@@ -451,6 +459,7 @@ prettyExpr (LogE x) = pretty x
 prettyExpr (Declaration (EV v) e) = pretty v <+> "=" <+> prettyExpr e
 prettyExpr (ListE xs) = list (map prettyExpr xs)
 prettyExpr (TupleE xs) = tupled (map prettyExpr xs)
+prettyExpr (RecE entries) = encloseSep "{" "}" "," (map (\(EV v,e) -> pretty v <+> "=" <+> prettyExpr e) entries)
 prettyExpr (Signature (EV v) e) = pretty v <+> elang' <> "::" <+> eprop' <> etype' <> econs' where 
   elang' :: Doc AnsiStyle
   elang' = maybe "" (\(Lang x) -> pretty x <> " ") (elang e)
@@ -493,6 +502,7 @@ prettyType (FunT t1 t2) = prettyType t1 <+> "->" <+> prettyType t2
 prettyType t@(Forall _ _) = "forall" <+> hsep (forallVars t) <+> "." <+> forallBlock t
 prettyType (ExistT (TV e)) = "<" <> pretty e <> ">"
 prettyType (ArrT (TV v) ts) = pretty v <+> hsep (map prettyType ts)
+prettyType (RecT entries) = encloseSep "{" "}" "," (map (\(TV v,e) -> pretty v <+> "=" <+> prettyType e) entries)
 
 class Describable a where
   desc :: a -> String
@@ -509,6 +519,7 @@ instance Describable Expr where
   desc (NumE x) = "NumE:" ++ show x
   desc (LogE x) = "LogE:" ++ show x
   desc (StrE x) = "StrE:" ++ show x
+  desc (RecE _) = "RecE:"
   desc (Declaration (EV e) _) = "Declaration:" ++ T.unpack e
   desc (Signature (EV e) _) = "Signature:" ++ T.unpack e
 
@@ -519,3 +530,4 @@ instance Describable Type where
   desc (Forall (TV v) _) = "Forall:" ++ T.unpack v
   desc (FunT t1 t2) = "FunT (" ++ desc t1 ++ ") (" ++ desc t2 ++ ")"
   desc (ArrT (TV v) xs) = "ArrT:" ++ T.unpack v ++ " " ++ (concat . map desc) xs
+  desc (RecT _)  = "RecT:"

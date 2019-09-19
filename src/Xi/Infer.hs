@@ -103,6 +103,7 @@ renameType (Forall v t) = do
   return $ Forall v' t'
 renameType (FunT t1 t2) = FunT <$> renameType t1 <*> renameType t2
 renameType (ArrT v ts) = ArrT <$> pure v <*> mapM renameType ts
+renameType (RecT rs) = RecT <$> mapM (\(x,t) -> (,) <$> pure x <*> renameType t) rs
 
 unrenameExpr :: Expr -> Expr
 unrenameExpr = mapT unrenameType
@@ -117,6 +118,7 @@ unrenameType t@(ExistT _) = t
 unrenameType (Forall v t) = Forall (unrename v) (unrenameType t)
 unrenameType (FunT t1 t2) = FunT (unrenameType t1) (unrenameType t2)
 unrenameType (ArrT v ts) = ArrT v (map unrenameType ts)
+unrenameType (RecT rs) = RecT [(x, unrenameType t) | (x,t) <- rs]
 
 
 -- | substitute all appearances of a given variable with an existential
@@ -132,6 +134,7 @@ substitute' v r t = sub t where
     | v /= x = Forall x (sub t')
     | otherwise = t -- allows shadowing of the variable
   sub (ArrT v' ts) = ArrT v' (map sub ts)
+  sub (RecT rs) = RecT [(x, sub t) | (x,t) <- rs]
   sub t' = t'
 
 -- | substitute all appearances of a given variable with an existential
@@ -154,6 +157,7 @@ apply g a@(ExistT v) = case lookupT v g of
   (Just t') -> apply g t' -- reduce an existential; strictly smaller term
   Nothing -> a
 apply g (ArrT v ts) = ArrT v (map (apply g) ts) 
+apply g (RecT rs) = RecT (map (\(n,t) -> (n, apply g t)) rs)
 
 applyE :: Gamma -> Expr -> Expr
 applyE g e = mapT (apply g) e
@@ -170,6 +174,7 @@ free v@(ExistT _) = Set.singleton v
 free (FunT t1 t2) = Set.union (free t1) (free t2)
 free (Forall v t) = Set.delete (VarT v) (free t)
 free (ArrT _ xs) = Set.unions (map free xs)
+free (RecT rs) = Set.unions [free t | (_,t) <- rs]
 
 -- | type 1 is more polymorphic than type 2 (Dunfield Figure 9)
 subtype :: Type -> Type -> Gamma -> Stack Gamma
@@ -219,7 +224,17 @@ subtype' (ArrT v1 vs1) (ArrT v2 vs2) g = do
     compareArr (t1':ts1') (t2':ts2') g' = do
       g'' <- subtype t1' t2' g'
       compareArr ts1' ts2' g''
-    compareArr _ _ _ = throwError UnkindJackass
+    compareArr _ _ _ = throwError TypeMismatch
+
+subtype' (RecT rs1) (RecT rs2) g
+  | length rs1 /= length rs2 = throwError TypeMismatch
+  | otherwise = compareEntry (DL.sort rs1) (DL.sort rs2) g where
+      compareEntry :: [(TVar, Type)] -> [(TVar, Type)] -> Gamma -> Stack Gamma
+      compareEntry [] [] g2 = return g2
+      compareEntry ((v1, t1):rs1') ((v2, t2):rs2') g2 = do
+        g2 <- subtype (VarT v1) (VarT v2) g2
+        g3 <- subtype t1 t2 g2
+        compareEntry rs1' rs2' g3
 
 --  g1 |- A1 <: B1
 -- ----------------------------------------- <:App
@@ -391,6 +406,12 @@ checkRealization e1 e2 = f' (etype e1) (etype e2) where
   f' x            (Forall _ y) = f' x y
   f' _ _ = return ()
 
+chainInfer :: Gamma -> [Expr] -> [Type] -> [Expr] -> Stack (Gamma, [Type], [Expr])
+chainInfer g [] ts es = return (g, ts, es)
+chainInfer g (x:xs) ts es = do
+  (g', t', e') <- infer g x
+  chainInfer g' xs (t':ts) (e':es)
+
 infer
   :: Gamma
   -> Expr -- ^ A subexpression from the original expression
@@ -506,20 +527,21 @@ infer' g e1@(ListE (x:xs)) = do
     checkAll g (e:es) t = do
       (g', _, _) <- check g e t
       checkAll g' es t
-infer' g (TupleE []) = error "Illegal tuple (length must be greater than 1)"
-infer' g (TupleE [x]) = error "Illegal tuple (length must be greater than 1)"
+infer' g (TupleE []) = throwError EmptyTuple
+infer' g (TupleE [x]) = throwError TupleSingleton
 infer' g (TupleE xs) = do
-  (g', ts, es) <- inferAll g (reverse xs) [] []
+  (g', ts, es) <- chainInfer g (reverse xs) [] []
   let v = TV . T.pack $ "Tuple" ++ (show (length xs))
       t = ArrT v ts
       e = TupleE es
   return (g', t, AnnE e t)
-  where
-    inferAll :: Gamma -> [Expr] -> [Type] -> [Expr] -> Stack (Gamma, [Type], [Expr])
-    inferAll g [] ts es = return (g, ts, es)
-    inferAll g (x:xs) ts es = do
-      (g', t', e') <- infer g x
-      inferAll g' xs (t':ts) (e':es)
+
+-- ----------------------------------------- -->Rec
+infer' _ (RecE []) = throwError EmptyRecord
+infer' g1 e@(RecE rs) = do
+  (g2, ts, es) <- chainInfer g1 (reverse $ map snd rs) [] []
+  let t = RecT (zip [TV x | (EV x, _) <- rs] ts)
+  return (g2, t, AnnE e t)
 
 -- | Pattern matches against each type
 check

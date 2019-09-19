@@ -188,7 +188,8 @@ readType s = case parse (pType <* eof) "" s of
 
 pExpr :: Parser Expr
 pExpr
-  =   try pTuple
+  =   try pRecordE
+  <|> try pTuple
   <|> try pUni
   <|> try pAnn
   <|> try pApp
@@ -200,6 +201,16 @@ pExpr
   <|> parens pExpr
   <|> pLam
   <|> pVar
+
+pRecordE :: Parser Expr
+pRecordE = fmap RecE $ braces (sepBy1 pRecordEntryE (symbol ","))
+
+pRecordEntryE :: Parser (EVar, Expr)
+pRecordEntryE = do
+  n <- name
+  _ <- symbol "="
+  e <- pExpr
+  return (EV n, e)
 
 pListE :: Parser Expr
 pListE = fmap ListE $ brackets (sepBy pExpr (symbol ","))
@@ -278,12 +289,23 @@ pEVar = fmap EV name
 pType :: Parser Type
 pType
   =   pExistential
+  <|> try pRecordT
   <|> try pForAllT
   <|> try pArrT
   <|> try pFunT
   <|> pListT
   <|> parens pType
   <|> pVarT
+
+pRecordT :: Parser Type
+pRecordT = fmap RecT $ braces (sepBy1 pRecordEntryT (symbol ","))
+
+pRecordEntryT :: Parser (TVar, Type)
+pRecordEntryT = do
+  n <- name
+  _ <- symbol "::"
+  t <- pType
+  return (TV n, t)
 
 pExistential :: Parser Type
 pExistential = do

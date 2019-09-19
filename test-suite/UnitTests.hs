@@ -78,6 +78,7 @@ arr s ts = ArrT (TV s) ts
 lst t = arr "List" [t]
 tuple ts = ArrT v ts where
   v = (TV . T.pack) ("Tuple" ++ show (length ts))
+record rs = RecT (map (\(x,t)->(TV x, t)) rs)
 
 unitTests = testGroup "Unit tests"
   [
@@ -163,6 +164,9 @@ unitTests = testGroup "Unit tests"
     -- tuples
     , exprTestGood "tuple of primitives" "(4.2, True)" (arr "Tuple2" [num, bool])
     , exprTestGood "tuple containing an applied variable" "f :: forall a . a -> a; (f 53, True)" (tuple [int, bool])
+    -- record
+    , exprTestGood "primitive record statement" "{x=42, y=\"yolo\"}" (record [("x", int), ("y", str)])
+    , exprTestGood "primitive record statement" "Foo :: {x :: Int, y :: Str}" (record [("x", int), ("y", str)])
     -- extra space
     , exprTestGood "leading space" " 42" int
     , exprTestGood "trailing space" "42 " int

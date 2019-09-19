@@ -1,5 +1,5 @@
 * required for current morloc compatibility
- [ ] records
+ [x] records
  [ ] language-specific source
         `source <lang> from <file> (<import-list>)`
  [ ] allow scientific numbers
