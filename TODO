@@ -8,14 +8,13 @@
  [x] allow quotation of type names (needed for realizations)
  [x] allow comments
  [x] allow reading from files (in app)
- [ ] add module namespaces
- [ ] manage serialization
- [ ] add label syntax in type signatures
+ [x] add label syntax in type signatures (parse, but ignore)
  [ ] read code from files using a given function of type
         `fileReader :: Filename -> IO Text`
      This function both finds the file (searching locally or across databases)
      and opens the file.
  [ ] transform expressions into a graph of Manifold objects
+ [ ] manage serialization
  [ ] write `realize` function
 
 * documentation
@@ -35,6 +34,8 @@
 # features for v0.2.0
 
 * core features
+ [ ] add label semantics in type signatures
+ [ ] add module namespaces
  [ ] record access
  [ ] add algebraic types
  [ ] manage typecasting

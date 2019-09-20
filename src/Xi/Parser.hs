@@ -55,6 +55,12 @@ reservedWords :: [T.Text]
 reservedWords = ["module", "source", "from", "where", "import",
                  "export", "as", "True", "False"]
 
+operatorChars :: String
+operatorChars = ":!$%&*+./<=>?@\\^|-~#"
+
+op :: T.Text -> Parser T.Text
+op o = (lexeme . try) (symbol o <* notFollowedBy (oneOf operatorChars))
+
 reserved :: T.Text -> Parser T.Text
 reserved w = try (symbol w)
 
@@ -178,6 +184,17 @@ pSignature = do
     , econs = Set.fromList constraints
     , esource = Nothing
     })
+
+-- | match an optional tag that precedes some construction
+tag :: Parser a -> Parser (Maybe T.Text)
+tag p =
+  optional (try tag')
+  where
+    tag' = do
+      l <- name
+      _ <- op ":"
+      _ <- lookAhead p
+      return l
 
 pProperty :: Parser Property
 pProperty = do 
@@ -307,16 +324,34 @@ pEVar = fmap EV name
 pType :: Parser Type
 pType
   =   pExistential
+  <|> try pUniT
   <|> try pRecordT
   <|> try pForAllT
   <|> try pArrT
   <|> try pFunT
+  <|> try (parens pType) -- tagged [ ]
   <|> pListT
-  <|> parens pType
+  <|> pTupleT
   <|> pVarT
 
+pUniT :: Parser Type
+pUniT = do
+  _ <- symbol "("
+  _ <- symbol ")"
+  return UniT
+
+pTupleT :: Parser Type
+pTupleT = do
+  _ <- tag (symbol "(")
+  ts <- parens (sepBy1 pType (symbol ","))
+  let v = TV . T.pack $ "Tuple" ++ (show (length ts))
+  return $ ArrT v ts
+
 pRecordT :: Parser Type
-pRecordT = fmap RecT $ braces (sepBy1 pRecordEntryT (symbol ","))
+pRecordT = do
+  _ <- tag (symbol "{")
+  record <- braces (sepBy1 pRecordEntryT (symbol ","))
+  return $ RecT record
 
 pRecordEntryT :: Parser (TVar, Type)
 pRecordEntryT = do
@@ -348,10 +383,14 @@ pFunT = do
     pType' = parens pType <|> try pArrT <|> pVarT <|> pListT
 
 pListT :: Parser Type
-pListT = fmap (\x -> ArrT (TV "List") [x]) (brackets pType)
+pListT = do
+  label <- tag (symbol "[")
+  t <- brackets pType
+  return $ ArrT (TV "List") [t]
 
 pVarT :: Parser Type
 pVarT = do
+  label <- tag (name <|> stringLiteral)
   n <- name <|> stringLiteral
   return $ VarT (TV n)
 

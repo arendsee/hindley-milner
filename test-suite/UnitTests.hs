@@ -35,6 +35,14 @@ exprTestGood msg code t
       (Left err, _) -> error $  "The following error was raised: " <> show err
                              <> "\nin:\n" <> show code
 
+exprEqual :: String -> T.Text -> T.Text -> TestTree
+exprEqual msg code1 code2
+  = testCase msg
+  $ case ( runStack (typecheck (readProgram code1))
+         , runStack (typecheck (readProgram code2))) of
+      ((Right e1, _), (Right e2, _)) -> assertEqual "" e1 e2
+      _ -> error $ "Expected equal"
+
 exprTestFull :: String -> T.Text -> T.Text -> TestTree
 exprTestFull msg code expCode
   = testCase msg
@@ -176,6 +184,9 @@ unitTests = testGroup "Unit tests"
     -- tuples
     , exprTestGood "tuple of primitives" "(4.2, True)" (arr "Tuple2" [num, bool])
     , exprTestGood "tuple containing an applied variable" "f :: forall a . a -> a; (f 53, True)" (tuple [num, bool])
+    , exprTestGood "check 2-tuples type signature" "f :: (Num, Str)" (tuple [num,str])
+    , exprTestGood "1-tuples are just for grouping" "f :: (Num)" num
+    , exprTestGood "empty tuples are of unit type" "f :: ()" UniT
     -- records
     , exprTestGood "primitive record statement" "{x=42, y=\"yolo\"}" (record [("x", num), ("y", str)])
     , exprTestGood "primitive record signature" "Foo :: {x :: Num, y :: Str}" (record [("x", num), ("y", str)])
@@ -192,6 +203,26 @@ unitTests = testGroup "Unit tests"
     , exprTestGood "declaration with a signature (3)" "f :: Num -> Bool; f x = True; f" (fun [num, bool])
     , expectError  "primitive type mismatch should raise error" "f :: Num -> Bool; f x = 9999"
                    (SubtypeError num bool)
+
+    -- tags
+    , exprEqual "variable tags"
+                "F :: Int"
+                "F :: foo:Int"
+    , exprEqual "list tags"
+                "F :: [Int]"
+                "F :: foo:[Int]"
+    , exprEqual "record tags" 
+                "F :: {x::Int, y::Str}"
+                "F :: foo:{x::Int, y::Str}"
+    , exprEqual "nested tags (tuple)"
+                "F :: (Int, Str)"
+                "F :: foo:(i:Int, s:Str)"
+    , exprEqual "nested tags (list)"
+                "F :: [Int]"
+                "F :: xs:[x:Int]"
+    , exprEqual "nested tags (record)" 
+                "F :: {x::Int, y::Str}"
+                "F :: foo:{x::(i:Int), y::Str}"
 
     -- tests modules
     , exprTestGood "basic Main module" "module Main {[1,2,3]}" (lst num)
