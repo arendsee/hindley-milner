@@ -22,10 +22,12 @@ dependencies:
 - prettyprinter-ansi-terminal
 - extra
 - scientific
+- safe
 
 default-extensions:
   - OverloadedStrings
   - FlexibleInstances
+  - ViewPatterns
 
 ghc-options:
   - -Wall
@@ -53,6 +55,7 @@ executables:
     dependencies:
     - xi
     - docopt
+    - filepath
 
 tests:
   xi-test:

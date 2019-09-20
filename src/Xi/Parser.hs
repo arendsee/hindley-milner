@@ -104,7 +104,7 @@ pModule :: Parser Module
 pModule = do
   _ <- reserved "module"
   moduleName <- name
-  mes <- braces ( sepBy pModuleBody (symbol ";") )
+  mes <- braces ( many1 pModuleBody)
   return $ makeModule (MV moduleName) mes
 
 makeModule :: MVar -> [ModuleBody] -> Module
@@ -120,10 +120,10 @@ makeModule n mes = Module {
 
 pModuleBody :: Parser ModuleBody
 pModuleBody
-  =   try pImport
-  <|> try pExport
-  <|> try pStatement'
-  <|> pExpr'
+  =   try pImport <* optional (symbol ";")
+  <|> try pExport <* optional (symbol ";")
+  <|> try pStatement' <* optional (symbol ";")
+  <|> pExpr' <* optional (symbol ";")
   where
     pStatement' = fmap Body pStatement
     pExpr' = fmap Body pExpr

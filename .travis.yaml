@@ -14,6 +14,8 @@ before_install:
 # stack will handle the installation of GHC
 script:
   - stack --no-terminal --install-ghc test
+  - stack install
+  - xi -f examples/main.loc
 
 # Caching so the next build will be fast too.
 cache:

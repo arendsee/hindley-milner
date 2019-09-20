@@ -1,0 +1,10 @@
+module cbase {
+
+source "cpp" from "cbase.cpp" ("map")
+
+export map
+
+map :: forall a b . (a -> b) -> [a] -> [b]
+map cpp :: forall a b . (a -> b) -> [a] -> [b]
+
+}

@@ -9,13 +9,14 @@
  [x] allow comments
  [x] allow reading from files (in app)
  [x] add label syntax in type signatures (parse, but ignore)
- [ ] read code from files using a given function of type
+ [x] read code from files using a given function of type
         `fileReader :: Filename -> IO Text`
      This function both finds the file (searching locally or across databases)
      and opens the file.
  [ ] transform expressions into a graph of Manifold objects
- [ ] manage serialization
- [ ] write `realize` function
+ [ ] manage serialization (typecheck should return a list of manifolds as well
+     as a serialization map)
+ [ ] write `realize` function, taking an function
 
 * documentation
  [ ] update rules in docs

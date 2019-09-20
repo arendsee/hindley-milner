@@ -1,0 +1,4 @@
+import math (sqrt);
+import cbase (map);
+
+map sqrt [1,2,3];

@@ -1,12 +1,15 @@
-{-
- -  This is a block quote
- -}
-source "cpp" from "core.hpp" ("sqrt", "map")
+module math {
+
+source "cpp" from "core.hpp" ("sqrt", "pow")
+
+export sqrt;
+export pow;
 
 -- signature for a square root function
 sqrt :: Num -> Num;
 sqrt cpp :: double -> double;
 
-map :: forall a b . (a -> b) -> [a] -> [b];
+pow :: Num -> Num -> Num;
+pow cpp :: double -> double -> double;
 
-x = map sqrt [1,2,3];
+}
