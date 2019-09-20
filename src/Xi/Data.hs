@@ -1,3 +1,12 @@
+{-|
+Module      : Xi.Data
+Description : Data structures and related functions
+Copyright   : (c) Zebulun Arendsee, 2019
+License     : GPL-3
+Maintainer  : zbwrnz@gmail.com
+Stability   : experimental
+-}
+
 module Xi.Data
 (
     Stack
@@ -439,11 +448,11 @@ instance Indexable Expr where
   index _ = error "Can only index AnnE"
 
 typeStyle = SetAnsiStyle {
-      ansiForeground  = Just (Vivid, Green) -- ^ Set the foreground color, or keep the old one.
-    , ansiBackground  = Nothing             -- ^ Set the background color, or keep the old one.
-    , ansiBold        = Nothing             -- ^ Switch on boldness, or don’t do anything.
-    , ansiItalics     = Nothing             -- ^ Switch on italics, or don’t do anything.
-    , ansiUnderlining = Just Underlined     -- ^ Switch on underlining, or don’t do anything.
+      ansiForeground  = Just (Vivid, Green) -- Set the foreground color, or keep the old one.
+    , ansiBackground  = Nothing             -- Set the background color, or keep the old one.
+    , ansiBold        = Nothing             -- Switch on boldness, or don’t do anything.
+    , ansiItalics     = Nothing             -- Switch on italics, or don’t do anything.
+    , ansiUnderlining = Just Underlined     -- Switch on underlining, or don’t do anything.
   } 
 
 prettyMVar :: MVar -> Doc AnsiStyle

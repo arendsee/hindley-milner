@@ -1,5 +1,14 @@
 {-# LANGUAGE QuasiQuotes #-}
 
+{-|
+Module      : Main
+Description : Executable for debugging the Morloc typechecker
+Copyright   : (c) Zebulun Arendsee, 2019
+License     : GPL-3
+Maintainer  : zbwrnz@gmail.com
+Stability   : experimental
+-}
+
 module Main where
 
 import Xi

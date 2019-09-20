@@ -1,7 +1,7 @@
 name:                xi
 version:             0.1.0
 github:              "morloc-project/xi"
-license:             MIT
+license:             GPL-3
 author:              "Zebulun Arendsee"
 maintainer:          "zbwrnz@gmail.com"
 copyright:           "2019 Zebulun Arendsee"

@@ -1,3 +1,12 @@
+{-|
+Module      : Xi.Parser
+Description : Full parser for Morloc/Xi
+Copyright   : (c) Zebulun Arendsee, 2019
+License     : GPL-3
+Maintainer  : zbwrnz@gmail.com
+Stability   : experimental
+-}
+
 module Xi.Parser (readProgram, readType) where
 
 import Xi.Data

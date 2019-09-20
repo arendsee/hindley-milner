@@ -1,3 +1,12 @@
+{-|
+Module      : Xi.Infer
+Description : Core inference module
+Copyright   : (c) Zebulun Arendsee, 2019
+License     : GPL-3
+Maintainer  : zbwrnz@gmail.com
+Stability   : experimental
+-}
+
 module Xi.Infer (
   -- * The main type checker
     typecheck

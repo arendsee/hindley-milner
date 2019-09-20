@@ -1,6 +1,17 @@
+{-|
+Module      : Xi
+Description : The primary API for Xi
+Copyright   : (c) Zebulun Arendsee, 2019
+License     : GPL-3
+Maintainer  : zbwrnz@gmail.com
+Stability   : experimental
+-}
+
 module Xi (
     parse
   , typecheck
+  , cute
+  , ugly
   , XP.readType
   , Module(..)
   , MVar(..)
@@ -13,8 +24,6 @@ module Xi (
   , Constraint(..)
   , TypeError(..)
   , Filename
-  , cute
-  , ugly
 ) where
 
 import Xi.Data
