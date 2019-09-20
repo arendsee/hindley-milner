@@ -86,6 +86,8 @@ unitTests = testGroup "Unit tests"
       exprTestGood "block comments (1)" "{- -} 42" num
     , exprTestGood "block comments (2)" " {--} 42{-   foo -} " num
     , exprTestGood "line comments (3)" "-- foo\n 42" num
+    -- semicolons
+    , exprTestGood "semicolons are allowed at the end" "42;" num
     -- primitives
     , exprTestGood "primitive integer" "42" num
     , exprTestGood "primitive big integer" "123456789123456789123456789" num
@@ -294,7 +296,7 @@ unitTests = testGroup "Unit tests"
         ]
     -- source
     , (flip $ exprTestGood "can source") num $ T.unlines -- FIXME: this does not prove much beyond syntax
-        [ "source \"c\" from \"foo.c\" (\"yolo\" as f);" 
+        [ "source \"c\" from \"foo.c\" (\"yolo\" as f, \"olga\");" 
         , "f c :: qwer -> sadf;"
         , "f :: cc -> vv;"
         , "44"

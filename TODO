@@ -7,7 +7,7 @@
  [x] allow scientific numbers
  [x] allow quotation of type names (needed for realizations)
  [x] allow comments
- [ ] allow reading from files (in app)
+ [x] allow reading from files (in app)
  [ ] add module namespaces
  [ ] manage serialization
  [ ] add label syntax in type signatures
@@ -16,6 +16,7 @@
      This function both finds the file (searching locally or across databases)
      and opens the file.
  [ ] transform expressions into a graph of Manifold objects
+ [ ] write `realize` function
 
 * documentation
  [ ] update rules in docs

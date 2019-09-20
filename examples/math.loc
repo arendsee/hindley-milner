@@ -1,0 +1,12 @@
+{-
+ -  This is a block quote
+ -}
+source "cpp" from "core.hpp" ("sqrt", "map")
+
+-- signature for a square root function
+sqrt :: Num -> Num;
+sqrt cpp :: double -> double;
+
+map :: forall a b . (a -> b) -> [a] -> [b];
+
+x = map sqrt [1,2,3];

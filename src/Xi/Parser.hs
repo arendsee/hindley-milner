@@ -84,15 +84,15 @@ data ModuleBody
 
 pProgram :: Parser [Module]
 pProgram = do
-  es <- sepBy pToplevel (symbol ";")
+  es <- many pToplevel
   let mods = [m | (TModule m) <- es]
   case [e | (TModuleBody e) <- es] of
     [] -> return mods
     es' -> return $ makeModule (MV "Main") es' : mods
 
 pToplevel :: Parser Toplevel
-pToplevel =   try (fmap TModule pModule)
-          <|> fmap TModuleBody pModuleBody
+pToplevel =   try (fmap TModule pModule <* optional (symbol ";"))
+          <|> fmap TModuleBody (pModuleBody <* optional (symbol ";"))
 
 pModule :: Parser Module
 pModule = do
@@ -219,7 +219,7 @@ pSrcE = do
   reserved "source"
   language <- stringLiteral 
   srcfile <- optional (reserved "from" >> stringLiteral)
-  rs <- parens (many1 pImportSourceTerm)
+  rs <- parens (sepBy1 pImportSourceTerm (symbol ","))
   return $ SrcE (Lang language) srcfile rs
 
 pImportSourceTerm :: Parser (EVar, Maybe EVar)

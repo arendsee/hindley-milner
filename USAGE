@@ -1,7 +1,9 @@
 xi version 0.1.0
 
 Usage:
-  xi [--type] <expression>
+  xi [--type] [--raw] [--file] <code>
 
 Options:
   -t, --type  Parse a typestring instead of an expression
+  -r, --raw   Print the raw Expression object (no pretty printing)
+  -f, --file  Read <code> as a filename rather than an expression
