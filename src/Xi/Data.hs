@@ -48,6 +48,7 @@ module Xi.Data
   , Language(..)
 ) where
 
+import Xi.Util((<>))
 
 import qualified Data.List as DL
 import Control.Monad.Except (throwError)
@@ -60,7 +61,7 @@ import qualified Control.Monad as CM
 import qualified Data.Text as T
 import qualified Data.Set as Set
 import qualified Data.Map as Map
-import Data.Text.Prettyprint.Doc
+import Data.Text.Prettyprint.Doc hiding ((<>))
 import Data.Text.Prettyprint.Doc.Render.Terminal
 import Data.Text.Prettyprint.Doc.Render.Terminal.Internal
 import qualified Data.Scientific as DS

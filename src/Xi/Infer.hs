@@ -15,6 +15,7 @@ module Xi.Infer (
 ) where
 
 import Xi.Data
+import Xi.Util((<>))
 import Control.Monad (foldM)
 import qualified Data.Text as T
 import qualified Data.Set as Set

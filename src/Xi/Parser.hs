@@ -1,6 +1,7 @@
 module Xi.Parser (readProgram, readType) where
 
 import Xi.Data
+import Xi.Util((<>))
 import Text.Megaparsec
 import Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as L

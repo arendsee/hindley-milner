@@ -3,6 +3,7 @@
 module Main where
 
 import Xi
+import Xi.Util((<>))
 
 import System.Console.Docopt
 import qualified System.Environment as SE
