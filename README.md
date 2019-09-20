@@ -31,4 +31,4 @@ In the example above, notice that the `map` and `f` functions are not defined.
 `Xi` makes an open-world assumption where it is sufficient that `map` and `f`
 are functions that could exist. `Xi` checks whether they are used consistently.
 
-For more information, see the [project page](https://arendsee.github.io/xi/).
+For more information, see the [project page](https://morloc-project.github.io/xi/).

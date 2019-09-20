@@ -1,6 +1,6 @@
 name:                xi
 version:             0.1.0
-github:              "arendsee/Xi"
+github:              "morloc-project/xi"
 license:             MIT
 author:              "Zebulun Arendsee"
 maintainer:          "zbwrnz@gmail.com"
@@ -9,7 +9,7 @@ extra-source-files:
     - README.md
     - TODO
     - USAGE
-description:         Please see the README on GitHub at <https://github.com/arendsee/xi#readme>
+description:         Please see the README on GitHub at <https://github.com/morloc-project/xi#readme>
 
 dependencies:
 - base >= 4.7 && < 5
