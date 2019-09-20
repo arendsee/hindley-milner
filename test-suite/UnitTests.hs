@@ -62,8 +62,6 @@ expectError msg expr err = testCase msg
   $ case runStack (typecheck (readProgram expr)) of
       (Right _, _) -> assertFailure . T.unpack $ "Expected failure"
       (Left err, _) -> return ()
-      (Left err', _) -> assertFailure
-        $ "Expected error (" <> show err <> ") got error (" <> show err' <> ")"
 
 testPasses :: String -> T.Text -> TestTree
 testPasses msg e
@@ -72,7 +70,6 @@ testPasses msg e
       (Right _, _) -> return ()
       (Left e, _) -> assertFailure $ "Expected this test to pass, but it failed with the message: " <> show e
 
-int = VarT (TV "Num")
 bool = VarT (TV "Bool")
 num = VarT (TV "Num")
 str = VarT (TV "Str")

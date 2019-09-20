@@ -6,9 +6,9 @@ import Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as L
 import qualified Data.Text as T
 import Data.Void (Void)
-import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.Scientific as DS
+
 
 type Parser = Parsec Void T.Text
 
@@ -103,9 +103,9 @@ pToplevel =   try (fmap TModule pModule <* optional (symbol ";"))
 pModule :: Parser Module
 pModule = do
   _ <- reserved "module"
-  moduleName <- name
+  moduleName' <- name
   mes <- braces ( many1 pModuleBody)
-  return $ makeModule (MV moduleName) mes
+  return $ makeModule (MV moduleName') mes
 
 makeModule :: MVar -> [ModuleBody] -> Module
 makeModule n mes = Module {
@@ -329,7 +329,7 @@ pType
   <|> try pForAllT
   <|> try pArrT
   <|> try pFunT
-  <|> try (parens pType) -- tagged [ ]
+  <|> try (parens pType)
   <|> pListT
   <|> pTupleT
   <|> pVarT
@@ -384,13 +384,13 @@ pFunT = do
 
 pListT :: Parser Type
 pListT = do
-  label <- tag (symbol "[")
+  _ <- tag (symbol "[")
   t <- brackets pType
   return $ ArrT (TV "List") [t]
 
 pVarT :: Parser Type
 pVarT = do
-  label <- tag (name <|> stringLiteral)
+  _ <- tag (name <|> stringLiteral)
   n <- name <|> stringLiteral
   return $ VarT (TV n)
 

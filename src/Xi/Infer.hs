@@ -15,14 +15,11 @@ module Xi.Infer (
 ) where
 
 import Xi.Data
-import Control.Monad (replicateM, foldM)
+import Control.Monad (foldM)
 import qualified Data.Text as T
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Data.List as DL
-import qualified Data.List.Extra as LE
-
-import Debug.Trace
 
 typecheck :: [Module] -> Stack [Module]
 typecheck ms = do
@@ -38,7 +35,7 @@ mod2pair :: Module -> (MVar, Set.Set MVar)
 mod2pair m = (moduleName m, Set.fromList $ map (\(m',_,_) -> m') (moduleImports m))
 
 typecheckModules :: ModularGamma -> [Module] -> Stack [Module]
-typecheckModules mg [] = return []
+typecheckModules _ [] = return []
 typecheckModules mg (m:ms) = do
   g <- importFromModularGamma mg m
   (g', exprs) <- typecheckExpr g (moduleBody m)
@@ -52,7 +49,7 @@ insertWithCheck ms (v, m) = case Map.insertLookupWithKey (\_ _ y -> y) v m ms of
   (Nothing, ms') -> return ms'
 
 -- produce a path from sources to pools, die on cycles
-path :: (Eq a, Ord a) => Map.Map a (Set.Set a) -> Stack [a]
+path :: (Ord a) => Map.Map a (Set.Set a) -> Stack [a]
 path m
   | Map.size m == 0 = return []
   | otherwise =
@@ -69,7 +66,7 @@ isRoot m k _ = not $ Map.foldr (isChild k) False m
   where
     isChild :: (Ord a) => a -> Set.Set a -> Bool -> Bool
     isChild _ _ True = True 
-    isChild k s False = Set.member k s
+    isChild k' s False = Set.member k' s
 
 typecheckExpr :: Gamma -> [Expr] -> Stack (Gamma, [Expr])
 typecheckExpr g e = do
@@ -126,15 +123,15 @@ unrenameType (RecT rs) = RecT [(x, unrenameType t) | (x,t) <- rs]
 substitute' :: TVar -> Type -> Type -> Type
 substitute' v r t = sub t where
   sub :: Type -> Type
-  sub t@(VarT v')
+  sub t'@(VarT v')
     | v == v' = r
-    | otherwise = t
+    | otherwise = t'
   sub (FunT t1 t2) = FunT (sub t1) (sub t2)
-  sub t@(Forall x t')
-    | v /= x = Forall x (sub t')
-    | otherwise = t -- allows shadowing of the variable
+  sub t'@(Forall x t'')
+    | v /= x = Forall x (sub t'')
+    | otherwise = t' -- allows shadowing of the variable
   sub (ArrT v' ts) = ArrT v' (map sub ts)
-  sub (RecT rs) = RecT [(x, sub t) | (x,t) <- rs]
+  sub (RecT rs) = RecT [(x, sub t') | (x,t') <- rs]
   sub t' = t'
 
 -- | substitute all appearances of a given variable with an existential
@@ -226,15 +223,15 @@ subtype' (ArrT v1 vs1) (ArrT v2 vs2) g = do
       compareArr ts1' ts2' g''
     compareArr _ _ _ = throwError TypeMismatch
 
-subtype' (RecT rs1) (RecT rs2) g
-  | length rs1 /= length rs2 = throwError TypeMismatch
-  | otherwise = compareEntry (DL.sort rs1) (DL.sort rs2) g where
-      compareEntry :: [(TVar, Type)] -> [(TVar, Type)] -> Gamma -> Stack Gamma
-      compareEntry [] [] g2 = return g2
-      compareEntry ((v1, t1):rs1') ((v2, t2):rs2') g2 = do
-        g2 <- subtype (VarT v1) (VarT v2) g2
-        g3 <- subtype t1 t2 g2
-        compareEntry rs1' rs2' g3
+subtype' (RecT rs1) (RecT rs2) g = compareEntry (DL.sort rs1) (DL.sort rs2) g
+  where
+    compareEntry :: [(TVar, Type)] -> [(TVar, Type)] -> Gamma -> Stack Gamma
+    compareEntry [] [] g2 = return g2
+    compareEntry ((v1, t1):rs1') ((v2, t2):rs2') g2 = do
+      g3 <- subtype (VarT v1) (VarT v2) g2
+      g4 <- subtype t1 t2 g3
+      compareEntry rs1' rs2' g4
+    compareEntry _ _ _ = throwError TypeMismatch
 
 --  g1 |- A1 <: B1
 -- ----------------------------------------- <:App
@@ -463,13 +460,14 @@ infer' g (Declaration v e) = do
   return (g5, t3, Declaration v (generalizeE e3))
 
 -- Signature=>
-infer' g s1@(Signature v e) = do
+infer' g (Signature v e) = do
   e' <- addSource g v e
   (left, r3, right) <- case DL.findIndex (isAnnG v) g of
     (Just i) -> case (i, g !! i) of
       (0, AnnG _ r2) -> appendTypeSet e' r2 >>= (\x -> return ([], x, tail g))
-      (i, AnnG _ r2) -> appendTypeSet e' r2 >>= (\x -> return (take i g, x, drop (i+1) g))
-    _ -> case elang e' of
+      (_, AnnG _ r2) -> appendTypeSet e' r2 >>= (\x -> return (take i g, x, drop (i+1) g))
+      (_, _) -> throwError $ OtherError "bad Gamma"
+    Nothing -> case elang e' of
       (Just _) -> return (g, TypeSet Nothing [e'], [])
       Nothing -> return (g, TypeSet (Just e') [], [])
   return (left ++ (AnnG (VarE v) r3):right, UniT, Signature v e')
@@ -537,19 +535,13 @@ infer' g e1@(ListE []) = do
   t <- newvar
   let t' = ArrT (TV "List") [t]
   return (g +> t, t', ann e1 t')
-infer' g e1@(ListE (x:xs)) = do 
-  (g', t', _) <- infer g x
-  g'' <- checkAll g' xs t'
+infer' g1 e1@(ListE (x:xs)) = do 
+  (g2, t', _) <- infer g1 x
+  g3 <- foldM (quietCheck t') g2 xs
   let t'' = ArrT (TV "List") [t']
-  return (g'', t'', ann e1 t'')
-  where
-    checkAll :: Gamma -> [Expr] -> Type -> Stack Gamma
-    checkAll g [] _ = return g  
-    checkAll g (e:es) t = do
-      (g', _, _) <- check g e t
-      checkAll g' es t
-infer' g (TupleE []) = throwError EmptyTuple
-infer' g (TupleE [x]) = throwError TupleSingleton
+  return (g3, t'', ann e1 t'')
+infer' _ (TupleE []) = throwError EmptyTuple
+infer' _ (TupleE [_]) = throwError TupleSingleton
 infer' g (TupleE xs) = do
   (g', ts, es) <- chainInfer g (reverse xs) [] []
   let v = TV . T.pack $ "Tuple" ++ (show (length xs))
@@ -560,9 +552,14 @@ infer' g (TupleE xs) = do
 -- ----------------------------------------- -->Rec
 infer' _ (RecE []) = throwError EmptyRecord
 infer' g1 e@(RecE rs) = do
-  (g2, ts, es) <- chainInfer g1 (reverse $ map snd rs) [] []
+  (g2, ts, _) <- chainInfer g1 (reverse $ map snd rs) [] []
   let t = RecT (zip [TV x | (EV x, _) <- rs] ts)
   return (g2, t, AnnE e t)
+
+quietCheck :: Type -> Gamma -> Expr -> Stack Gamma
+quietCheck t g e = do
+  (g',_,_) <- check g e t
+  return g'
 
 -- | Pattern matches against each type
 check
@@ -628,7 +625,7 @@ derive g e t = do
 --  g1 |- e <= A -| g2
 -- ----------------------------------------- -->App
 --  g1 |- A->C o e =>> C -| g2
-derive' g e t@(FunT a b) = do
+derive' g e (FunT a b) = do
   (g', _, e') <- check g e a
   return (g', apply g' b, e')
 

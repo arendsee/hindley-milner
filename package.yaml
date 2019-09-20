@@ -1,6 +1,6 @@
 name:                xi
-version:             0.0.0
-github:              "arendsee/smurference"
+version:             0.1.0
+github:              "arendsee/Xi"
 license:             MIT
 author:              "Zebulun Arendsee"
 maintainer:          "zbwrnz@gmail.com"
@@ -22,7 +22,6 @@ dependencies:
 - prettyprinter-ansi-terminal
 - extra
 - scientific
-- safe
 
 default-extensions:
   - OverloadedStrings

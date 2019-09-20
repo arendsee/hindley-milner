@@ -75,6 +75,7 @@ typeSize (ExistT _) = 1
 typeSize (Forall _ t) = 1 + typeSize t
 typeSize (FunT t1 t2) = 1 + typeSize t1 + typeSize t2
 typeSize (ArrT _ xs) = 1 + sum (map typeSize xs) 
+typeSize (RecT xs) = 1 + sum (map (typeSize . snd) xs) 
 
 subtypeOf :: Type -> Type -> Gamma -> Bool
 subtypeOf t1 t2 g =
@@ -142,6 +143,9 @@ instance QC.Arbitrary Type where
     = [VarT (TV "X")]
     ++ [ArrT v (p':ps') | p' <- QC.shrink p, (ArrT _ ps') <- QC.shrink (ArrT v ps)]
     ++ [ArrT v (p:ps') | (ArrT _ ps') <- QC.shrink (ArrT v ps)]
+  shrink (RecT []) = [VarT (TV "X")]
+  shrink (RecT xs) = [VarT (TV "X")] ++ [RecT (tail xs)]
+  -- | RecT [(TVar, Type)]
 
 arbitraryType :: Int -> [TVar] -> QC.Gen Type
 arbitraryType depth vs = QC.oneof [

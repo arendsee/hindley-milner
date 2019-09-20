@@ -1,11 +1,27 @@
-module Xi (parse, typecheck, cute, ugly) where
+module Xi (
+    parse
+  , typecheck
+  , XP.readType
+  , Module(..)
+  , MVar(..)
+  , EVar(..)
+  , Expr(..)
+  , EType(..)
+  , Type(..)
+  , Language(..)
+  , Property(..)
+  , Constraint(..)
+  , TypeError(..)
+  , Filename
+  , cute
+  , ugly
+) where
 
 import Xi.Data
 import qualified Xi.Infer as XI 
 import qualified Xi.Parser as XP
 import qualified Data.Text as T
 import qualified Data.Map as Map
-import qualified Safe as Safe
 import qualified Control.Monad as CM
 import Data.Text.Prettyprint.Doc.Render.Terminal (putDoc)
 
@@ -19,12 +35,12 @@ parse checkSource loadModule code = fmap Map.elems $ parse' Map.empty code where
   parse' visited code' = CM.foldM parse'' visited (XP.readProgram code')
 
   parse'' :: (Map.Map MVar Module) -> Module -> IO (Map.Map MVar Module)
-  parse'' visited mod
-    | Map.member (moduleName mod) visited = return visited
+  parse'' visited m
+    | Map.member (moduleName m) visited = return visited
     | otherwise = do
-        checkSources checkSource mod
-        imports <- mapM loadModule [m | (m, _, _) <- moduleImports mod]
-        CM.foldM parse' (Map.insert (moduleName mod) mod visited) imports
+        checkSources checkSource m
+        imports <- mapM loadModule [n | (n, _, _) <- moduleImports m]
+        CM.foldM parse' (Map.insert (moduleName m) m visited) imports
 
 -- assert that all sourced resources exist
 checkSources :: (Filename -> IO ()) -> Module -> IO ()

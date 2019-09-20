@@ -48,6 +48,7 @@ module Xi.Data
   , Language(..)
 ) where
 
+
 import qualified Data.List as DL
 import Control.Monad.Except (throwError)
 import qualified Control.Monad.Except as ME
@@ -399,7 +400,7 @@ generalize t = generalize' existentialMap t where
       | v /= x = Forall x (f v t2)
       | otherwise = t1
     f v (ArrT v' xs) = ArrT v' (map (f v) xs)
-    f v (RecT xs) = RecT (map (\(v', t) -> (v', f v t)) xs)
+    f v (RecT xs) = RecT (map (\(v', _) -> (v', f v t)) xs)
     f _ t1 = t1
 
 generalizeE :: Expr -> Expr
@@ -479,6 +480,9 @@ prettyExpr (ListE xs) = list (map prettyExpr xs)
 prettyExpr (TupleE xs) = tupled (map prettyExpr xs)
 prettyExpr (SrcE (Lang l) (Just f) rs)
   = "source" <+> pretty l <+> "from" <+> pretty f
+  <+> tupled (map (\(EV n, a) -> pretty n <> maybe "" (\(EV x) -> " " <> "as" <+> pretty x) a) rs)
+prettyExpr (SrcE (Lang l) Nothing rs)
+  = "source" <+> pretty l
   <+> tupled (map (\(EV n, a) -> pretty n <> maybe "" (\(EV x) -> " " <> "as" <+> pretty x) a) rs)
 prettyExpr (RecE entries) = encloseSep "{" "}" ", " (map (\(EV v,e) -> pretty v <+> "=" <+> prettyExpr e) entries)
 prettyExpr (Signature (EV v) e) = pretty v <+> elang' <> "::" <+> eprop' <> etype' <> econs' where 

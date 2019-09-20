@@ -1,4 +1,4 @@
-# features for v0.1.0
+=== features for v0.1.0
 
 * required for current morloc compatibility
  [x] records
@@ -13,10 +13,6 @@
         `fileReader :: Filename -> IO Text`
      This function both finds the file (searching locally or across databases)
      and opens the file.
- [ ] transform expressions into a graph of Manifold objects
- [ ] manage serialization (typecheck should return a list of manifolds as well
-     as a serialization map)
- [ ] write `realize` function, taking an function
 
 * documentation
  [ ] update rules in docs
@@ -32,7 +28,7 @@
  [ ] write haddock comments for every function
 
 
-# features for v0.2.0
+=== features for v0.2.0
 
 * core features
  [ ] add label semantics in type signatures

@@ -3,8 +3,6 @@
 module Main where
 
 import Xi
-import Xi.Data
-import Xi.Parser (readType)
 
 import System.Console.Docopt
 import qualified System.Environment as SE
