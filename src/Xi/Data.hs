@@ -9,6 +9,7 @@ module Xi.Data
   , Gamma
   , GammaIndex(..)
   , Module(..)
+  , Filename
   , cut
   , (+>)
   , TypeError(..)
@@ -17,6 +18,7 @@ module Xi.Data
   , ann
   , lookupT
   , lookupE
+  , lookupSrc
   , throwError
   , runStack
   , index
@@ -78,6 +80,7 @@ runStack e
   $ StackConfig 0
          
 
+type Filename = T.Text
 type Gamma = [GammaIndex]
 newtype EVar = EV T.Text deriving(Show, Eq, Ord)
 newtype MVar = MV T.Text deriving(Show, Eq, Ord)
@@ -106,6 +109,8 @@ data GammaIndex
   | MarkG TVar
   -- ^ (G,>a^) Store a type variable marker bound under a forall
   | MarkEG EVar
+  -- ^ ...
+  | SrcG (EVar, Language, Maybe Filename, EVar)
   deriving(Ord, Eq, Show)
 
 data Module = Module {
@@ -117,7 +122,9 @@ data Module = Module {
 
 -- | Terms, see Dunfield Figure 1
 data Expr
-  = Signature EVar EType
+  = SrcE Language (Maybe Filename) [(EVar, Maybe EVar)]
+  -- ^ import "c" from "foo.c" ("f" as yolo)
+  | Signature EVar EType
   -- ^ x :: A; e
   | Declaration EVar Expr
   -- ^ x=e1; e2
@@ -181,6 +188,7 @@ data EType = EType {
   , elang :: Maybe Language
   , eprop :: Set.Set Property
   , econs :: Set.Set Constraint
+  , esource :: Maybe (Maybe Filename, EVar)
 } deriving(Show, Eq, Ord)
 
 data TypeSet = TypeSet (Maybe EType) [EType] deriving(Show, Eq, Ord)
@@ -213,6 +221,7 @@ data TypeError
   | CannotImportMain
   | SelfImport MVar
   | BadRealization
+  | MissingSource
   -- type extension errors
   | AmbiguousPacker TVar
   | AmbiguousUnpacker TVar
@@ -238,6 +247,7 @@ instance Typed EType where
     , elang = Nothing
     , eprop = Set.empty
     , econs = Set.empty
+    , esource = Nothing
     }  
 
 instance Typed TypeSet where
@@ -325,6 +335,14 @@ lookupT v ((SolvedG v' t):gs)
   | v == v' = Just t
   | otherwise = lookupT v gs
 lookupT v (_:gs) = lookupT v gs
+
+-- | Look up the source of a function
+lookupSrc :: (EVar, Language) -> Gamma -> Maybe (EVar, Language, Maybe Filename, EVar)
+lookupSrc _ [] = Nothing
+lookupSrc (e,l) (SrcG x@(e', l', _, _) : rs)
+  | e == e' && l == l' = Just x
+  | otherwise = lookupSrc (e,l) rs
+lookupSrc x (_:rs) = lookupSrc x rs
 
 access1 :: Indexable a => a -> Gamma -> Maybe (Gamma, GammaIndex, Gamma)
 access1 gi gs = case DL.elemIndex (index gi) gs of
@@ -459,6 +477,9 @@ prettyExpr (LogE x) = pretty x
 prettyExpr (Declaration (EV v) e) = pretty v <+> "=" <+> prettyExpr e
 prettyExpr (ListE xs) = list (map prettyExpr xs)
 prettyExpr (TupleE xs) = tupled (map prettyExpr xs)
+prettyExpr (SrcE (Lang l) (Just f) rs)
+  = "source" <+> pretty l <+> "from" <+> pretty f
+  <+> tupled (map (\(EV n, a) -> pretty n <> maybe "" (\(EV x) -> " " <> "as" <+> pretty x) a) rs)
 prettyExpr (RecE entries) = encloseSep "{" "}" ", " (map (\(EV v,e) -> pretty v <+> "=" <+> prettyExpr e) entries)
 prettyExpr (Signature (EV v) e) = pretty v <+> elang' <> "::" <+> eprop' <> etype' <> econs' where 
   elang' :: Doc AnsiStyle
@@ -512,6 +533,7 @@ instance Describable Expr where
   desc (VarE (EV v)) = "VarE:" ++ T.unpack v
   desc (ListE _) = "ListE"
   desc (TupleE _) = "Tuple"
+  desc (SrcE _ _ _) = "SrcE:"
   desc (LamE (EV v) _) = "LamE:" ++ T.unpack v
   desc (AppE e1 e2) = "AppE (" ++ desc e1 ++ ") (" ++ desc e2 ++ ")"
   desc (AnnE e _) = "AnnE (" ++ desc e ++ ")"

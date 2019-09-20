@@ -292,6 +292,13 @@ unitTests = testGroup "Unit tests"
         , "f r :: integer -> integer -> string;"
         , "f 44"
         ]
+    -- source
+    , (flip $ exprTestGood "can source") num $ T.unlines -- FIXME: this does not prove much beyond syntax
+        [ "source \"c\" from \"foo.c\" (\"yolo\" as f);" 
+        , "f c :: qwer -> sadf;"
+        , "f :: cc -> vv;"
+        , "44"
+        ]
     -- internal
     , exprTestFull "every sub-expression should be annotated in output"
                    "f :: forall a . a -> Bool; f 42"

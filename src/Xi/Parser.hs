@@ -52,7 +52,8 @@ angles :: Parser a -> Parser a
 angles p = lexeme $ between (symbol "<") (symbol ">") p
 
 reservedWords :: [T.Text]
-reservedWords = ["module", "where", "import", "export", "as", "True", "False"]
+reservedWords = ["module", "source", "from", "where", "import",
+                 "export", "as", "True", "False"]
 
 reserved :: T.Text -> Parser T.Text
 reserved w = try (symbol w)
@@ -65,12 +66,11 @@ stringLiteral = do
   return $ T.pack s
 
 name :: Parser T.Text
-name = (lexeme . try) (p >>= check)
-  where
-    p       = fmap T.pack $ (:) <$> letterChar <*> many (alphaNumChar <|> char '_')
-    check x = if elem x reservedWords
-                then failure Nothing Set.empty -- TODO: error message
-                else return x
+name = (lexeme . try) (p >>= check) where
+  p       = fmap T.pack $ (:) <$> letterChar <*> many (alphaNumChar <|> char '_')
+  check x = if elem x reservedWords
+              then failure Nothing Set.empty -- TODO: error message
+              else return x
 
 data Toplevel
   = TModule Module
@@ -176,6 +176,7 @@ pSignature = do
     , elang = fmap Lang lang
     , eprop = Set.fromList props
     , econs = Set.fromList constraints
+    , esource = Nothing
     })
 
 pProperty :: Parser Property
@@ -205,10 +206,27 @@ pExpr
   <|> try pStrE
   <|> try pLogE
   <|> try pNumE
+  <|> try pSrcE
   <|> pListE
   <|> parens pExpr
   <|> pLam
   <|> pVar
+
+-- source "c" from "foo.c" ("Foo" as foo, "bar")
+-- source "R" ("sqrt", "t.test" as t_test)
+pSrcE :: Parser Expr
+pSrcE = do
+  reserved "source"
+  language <- stringLiteral 
+  srcfile <- optional (reserved "from" >> stringLiteral)
+  rs <- parens (many1 pImportSourceTerm)
+  return $ SrcE (Lang language) srcfile rs
+
+pImportSourceTerm :: Parser (EVar, Maybe EVar)
+pImportSourceTerm = do
+  n <- stringLiteral
+  a <- optional (reserved "as" >> name)
+  return (EV n, fmap EV a)
 
 pRecordE :: Parser Expr
 pRecordE = fmap RecE $ braces (sepBy1 pRecordEntryE (symbol ","))
@@ -264,9 +282,7 @@ pLogE = pTrue <|> pFalse
     pFalse = reserved "False" >> return (LogE False)
 
 pStrE :: Parser Expr
-pStrE = do
-  s <- stringLiteral
-  return (StrE s)
+pStrE = fmap StrE stringLiteral
 
 pNumE :: Parser Expr
 pNumE = fmap NumE number

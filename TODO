@@ -1,6 +1,6 @@
 * required for current morloc compatibility
  [x] records
- [ ] language-specific source
+ [x] language-specific source
         `source <lang> from <file> (<import-list>)`
  [x] allow scientific numbers
  [x] allow quotation of type names (needed for realizations)

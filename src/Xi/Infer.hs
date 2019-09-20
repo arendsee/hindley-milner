@@ -395,6 +395,7 @@ appendTypeSet e1 s = case (elang e1, s) of
       , etype = etype e2
       , eprop = Set.union (eprop e1) (eprop e2)
       , econs = Set.union (econs e1) (econs e2)
+      , esource = Nothing
       }
     return $ TypeSet (Just e3) rs 
 
@@ -414,6 +415,16 @@ chainInfer g [] ts es = return (g, ts, es)
 chainInfer g (x:xs) ts es = do
   (g', t', e') <- infer g x
   chainInfer g' xs (t':ts) (e':es)
+
+
+addSource :: Gamma -> EVar -> EType -> Stack EType
+addSource g v e
+  = case elang e of
+    (Just l) -> case lookupSrc (v,l) g of
+      (Just (_, _, srcfile, srcname))
+        -> return $ e { esource = Just (srcfile, srcname) }
+      Nothing -> return e -- FIXME: technically, this should raise MissingSource
+    Nothing -> return e
 
 infer
   :: Gamma
@@ -453,14 +464,24 @@ infer' g (Declaration v e) = do
 
 -- Signature=>
 infer' g s1@(Signature v e) = do
+  e' <- addSource g v e
   (left, r3, right) <- case DL.findIndex (isAnnG v) g of
     (Just i) -> case (i, g !! i) of
-      (0, AnnG _ r2) -> appendTypeSet e r2 >>= (\x -> return ([], x, tail g))
-      (i, AnnG _ r2) -> appendTypeSet e r2 >>= (\x -> return (take i g, x, drop (i+1) g))
-    _ -> case elang e of
-      (Just _) -> return (g, TypeSet Nothing [e], [])
-      Nothing -> return (g, TypeSet (Just e) [], [])
-  return (left ++ (AnnG (VarE v) r3):right, UniT, Signature v e)
+      (0, AnnG _ r2) -> appendTypeSet e' r2 >>= (\x -> return ([], x, tail g))
+      (i, AnnG _ r2) -> appendTypeSet e' r2 >>= (\x -> return (take i g, x, drop (i+1) g))
+    _ -> case elang e' of
+      (Just _) -> return (g, TypeSet Nothing [e'], [])
+      Nothing -> return (g, TypeSet (Just e') [], [])
+  return (left ++ (AnnG (VarE v) r3):right, UniT, Signature v e')
+
+infer' g1 s1@(SrcE l f xs) = do 
+  let g3 = srcList g1 xs
+  return (g3, UniT, s1)
+  where
+    srcList :: Gamma -> [(EVar, Maybe EVar)] -> Gamma
+    srcList g2 [] = g2
+    srcList g2 ((e1, Just e2):rs) = srcList (g2 +> SrcG (e2, l, f, e1)) rs
+    srcList g2 ((e1, Nothing):rs) = srcList (g2 +> SrcG (e1, l, f, e1)) rs
 
 --  (x:A) in g
 -- ------------------------------------------- Var
