@@ -1,3 +1,5 @@
+# features for v0.1.0
+
 * required for current morloc compatibility
  [x] records
  [x] language-specific source
@@ -5,6 +7,7 @@
  [x] allow scientific numbers
  [x] allow quotation of type names (needed for realizations)
  [x] allow comments
+ [ ] allow reading from files (in app)
  [ ] add module namespaces
  [ ] manage serialization
  [ ] add label syntax in type signatures
@@ -14,15 +17,23 @@
      and opens the file.
  [ ] transform expressions into a graph of Manifold objects
 
-* QC coverage
- [ ] generate realization type signatures
- [ ] generate record types
- [ ] generate record expressions
- [ ] generate modules
- [ ] generate import/export
- [ ] generate scientific numbers
+* documentation
+ [ ] update rules in docs
+     [ ] context handling across modules (import/export semantics)
+     [ ] realizations
+     [ ] rules for merging signatures
+     [ ] source code
+ [ ] describe the entire typechecking algorithm in writing, especially hacky
+     steps like sorting the expressions 
+ [ ] more reading and flesh out the bibliography
+ [ ] add module documentation
+ [ ] extend README
+ [ ] write haddock comments for every function
 
-* beyond current morloc capabilities
+
+# features for v0.2.0
+
+* core features
  [ ] record access
  [ ] add algebraic types
  [ ] manage typecasting
@@ -32,3 +43,21 @@
  [ ] whitespace delimiting
  [ ] docstrings
  [ ] module comments (replace the external yaml files)
+
+* Error messages
+ [ ] Thread the TypeError object through megaparsec 
+ [ ] Add custom erorrs for issues like not quoting language names
+ [ ] Write tests that trigger every possible error and ensure they all have
+     proper messages
+
+* QC coverage
+ [ ] generate realization type signatures
+ [ ] generate record types
+ [ ] generate record expressions
+ [ ] generate modules
+ [ ] generate import/export
+ [ ] generate scientific numbers
+
+* performance
+ [ ] generate large code examples (~50K LOC)
+ [ ] add benchmarking
