@@ -189,7 +189,7 @@ pSignature = do
   constraints <- option [] $ reserved "where" >> parens (sepBy1 pConstraint (symbol ","))
   return $ Signature (EV v) (EType
     { etype = t
-    , elang = fmap Lang lang
+    , elang = lang
     , eprop = Set.fromList props
     , econs = Set.fromList constraints
     , esource = Nothing
@@ -247,7 +247,7 @@ pSrcE = do
   language <- stringLiteral 
   srcfile <- optional (reserved "from" >> stringLiteral)
   rs <- parens (sepBy1 pImportSourceTerm (symbol ","))
-  return $ SrcE (Lang language) srcfile rs
+  return $ SrcE language srcfile rs
 
 pImportSourceTerm :: Parser (EVar, Maybe EVar)
 pImportSourceTerm = do

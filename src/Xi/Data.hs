@@ -19,6 +19,7 @@ module Xi.Data
   , GammaIndex(..)
   , Module(..)
   , Filename
+  , Language
   , cut
   , (+>)
   , TypeError(..)
@@ -54,7 +55,6 @@ module Xi.Data
   , TypeSet(..)
   , Property(..)
   , Constraint(..)
-  , Language(..)
 ) where
 
 import Xi.Util((<>))
@@ -190,7 +190,7 @@ newtype Constraint = Con T.Text deriving(Show, Eq, Ord)
 -- | Eventually Lang should be an enumeration with a term for each supported
 -- language (as it is in Morloc). But until Xi is connected with Morloc, I will
 -- leave it as general text.
-newtype Language = Lang T.Text deriving(Show, Eq, Ord)
+type Language = T.Text
 
 -- | Extended Type that may represent a language specific type as well as sets
 -- of properties and constrains.
@@ -488,16 +488,16 @@ prettyExpr (LogE x) = pretty x
 prettyExpr (Declaration (EV v) e) = pretty v <+> "=" <+> prettyExpr e
 prettyExpr (ListE xs) = list (map prettyExpr xs)
 prettyExpr (TupleE xs) = tupled (map prettyExpr xs)
-prettyExpr (SrcE (Lang l) (Just f) rs)
-  = "source" <+> pretty l <+> "from" <+> pretty f
+prettyExpr (SrcE lang (Just f) rs)
+  = "source" <+> pretty lang <+> "from" <+> pretty f
   <+> tupled (map (\(EV n, a) -> pretty n <> maybe "" (\(EV x) -> " " <> "as" <+> pretty x) a) rs)
-prettyExpr (SrcE (Lang l) Nothing rs)
-  = "source" <+> pretty l
+prettyExpr (SrcE lang Nothing rs)
+  = "source" <+> pretty lang
   <+> tupled (map (\(EV n, a) -> pretty n <> maybe "" (\(EV x) -> " " <> "as" <+> pretty x) a) rs)
 prettyExpr (RecE entries) = encloseSep "{" "}" ", " (map (\(EV v,e) -> pretty v <+> "=" <+> prettyExpr e) entries)
 prettyExpr (Signature (EV v) e) = pretty v <+> elang' <> "::" <+> eprop' <> etype' <> econs' where 
   elang' :: Doc AnsiStyle
-  elang' = maybe "" (\(Lang x) -> pretty x <> " ") (elang e)
+  elang' = maybe "" (\lang -> pretty lang <> " ") (elang e)
 
   eprop' :: Doc AnsiStyle
   eprop' = case Set.toList (eprop e) of

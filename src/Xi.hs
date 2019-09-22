@@ -19,11 +19,11 @@ module Xi (
   , Expr(..)
   , EType(..)
   , Type(..)
-  , Language(..)
   , Property(..)
   , Constraint(..)
   , TypeError(..)
   , Filename
+  , Language
 ) where
 
 import Xi.Data
