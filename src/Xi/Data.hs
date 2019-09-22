@@ -133,7 +133,7 @@ data Module = Module {
 
 -- | Terms, see Dunfield Figure 1
 data Expr
-  = SrcE Language (Maybe Filename) [(EVar, Maybe EVar)]
+  = SrcE Language (Maybe Filename) [(EVar, EVar)]
   -- ^ import "c" from "foo.c" ("f" as yolo)
   | Signature EVar EType
   -- ^ x :: A; e
@@ -490,10 +490,10 @@ prettyExpr (ListE xs) = list (map prettyExpr xs)
 prettyExpr (TupleE xs) = tupled (map prettyExpr xs)
 prettyExpr (SrcE lang (Just f) rs)
   = "source" <+> pretty lang <+> "from" <+> pretty f
-  <+> tupled (map (\(EV n, a) -> pretty n <> maybe "" (\(EV x) -> " " <> "as" <+> pretty x) a) rs)
+  <+> tupled (map (\(EV n, EV a) -> pretty n <> if n == a then "" else (" as" <> pretty a)) rs)
 prettyExpr (SrcE lang Nothing rs)
   = "source" <+> pretty lang
-  <+> tupled (map (\(EV n, a) -> pretty n <> maybe "" (\(EV x) -> " " <> "as" <+> pretty x) a) rs)
+  <+> tupled (map (\(EV n, EV a) -> pretty n <> if n == a then "" else (" as" <> pretty a)) rs)
 prettyExpr (RecE entries) = encloseSep "{" "}" ", " (map (\(EV v,e) -> pretty v <+> "=" <+> prettyExpr e) entries)
 prettyExpr (Signature (EV v) e) = pretty v <+> elang' <> "::" <+> eprop' <> etype' <> econs' where 
   elang' :: Doc AnsiStyle

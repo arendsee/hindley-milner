@@ -249,11 +249,11 @@ pSrcE = do
   rs <- parens (sepBy1 pImportSourceTerm (symbol ","))
   return $ SrcE language srcfile rs
 
-pImportSourceTerm :: Parser (EVar, Maybe EVar)
+pImportSourceTerm :: Parser (EVar, EVar)
 pImportSourceTerm = do
   n <- stringLiteral
-  a <- optional (reserved "as" >> name)
-  return (EV n, fmap EV a)
+  a <- option n (reserved "as" >> name)
+  return (EV n, EV a)
 
 pRecordE :: Parser Expr
 pRecordE = fmap RecE $ braces (sepBy1 pRecordEntryE (symbol ","))

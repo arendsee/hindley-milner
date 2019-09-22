@@ -486,10 +486,9 @@ infer' g1 s1@(SrcE l f xs) = do
   let g3 = srcList g1 xs
   return (g3, UniT, s1)
   where
-    srcList :: Gamma -> [(EVar, Maybe EVar)] -> Gamma
+    srcList :: Gamma -> [(EVar, EVar)] -> Gamma
     srcList g2 [] = g2
-    srcList g2 ((e1, Just e2):rs) = srcList (g2 +> SrcG (e2, l, f, e1)) rs
-    srcList g2 ((e1, Nothing):rs) = srcList (g2 +> SrcG (e1, l, f, e1)) rs
+    srcList g2 ((e1, e2):rs) = srcList (g2 +> SrcG (e2, l, f, e1)) rs
 
 --  (x:A) in g
 -- ------------------------------------------- Var
