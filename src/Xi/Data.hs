@@ -126,6 +126,7 @@ data GammaIndex
 
 data Module = Module {
     moduleName :: MVar
+  , modulePath :: Maybe Filename
   , moduleImports :: [(MVar, EVar, Maybe EVar)]
   , moduleExports :: [EVar]
   , moduleBody :: [Expr]

@@ -30,7 +30,7 @@ typeof es = typeof' . head . reverse $ es where
 exprTestGood :: String -> T.Text -> Type -> TestTree
 exprTestGood msg code t
   = testCase msg
-  $ case runStack (typecheck (readProgram code)) of
+  $ case runStack (typecheck (readProgram Nothing code)) of
       (Right es', _) -> assertEqual "" t (typeof (main es'))
       (Left err, _) -> error $  "The following error was raised: " <> show err
                              <> "\nin:\n" <> show code
@@ -38,35 +38,35 @@ exprTestGood msg code t
 exprEqual :: String -> T.Text -> T.Text -> TestTree
 exprEqual msg code1 code2
   = testCase msg
-  $ case ( runStack (typecheck (readProgram code1))
-         , runStack (typecheck (readProgram code2))) of
+  $ case ( runStack (typecheck (readProgram Nothing code1))
+         , runStack (typecheck (readProgram Nothing code2))) of
       ((Right e1, _), (Right e2, _)) -> assertEqual "" e1 e2
       _ -> error $ "Expected equal"
 
 exprTestFull :: String -> T.Text -> T.Text -> TestTree
 exprTestFull msg code expCode
   = testCase msg
-  $ case runStack (typecheck (readProgram code)) of
-      (Right e, _) -> assertEqual "" (main e) (main $ readProgram expCode) 
+  $ case runStack (typecheck (readProgram Nothing code)) of
+      (Right e, _) -> assertEqual "" (main e) (main $ readProgram Nothing expCode) 
       (Left err, _) -> error (show err)
 
 exprTestBad :: String -> T.Text -> TestTree
 exprTestBad msg e
   = testCase msg
-  $ case runStack (typecheck (readProgram e)) of
+  $ case runStack (typecheck (readProgram Nothing e)) of
       (Right _, _) -> assertFailure . T.unpack $ "Expected '" <> e <> "' to fail"
       (Left _, _) -> return ()
 
 expectError :: String -> T.Text -> TypeError -> TestTree
 expectError msg expr err = testCase msg
-  $ case runStack (typecheck (readProgram expr)) of
+  $ case runStack (typecheck (readProgram Nothing expr)) of
       (Right _, _) -> assertFailure . T.unpack $ "Expected failure"
       (Left err, _) -> return ()
 
 testPasses :: String -> T.Text -> TestTree
 testPasses msg e
   = testCase msg
-  $ case runStack (typecheck (readProgram e)) of
+  $ case runStack (typecheck (readProgram Nothing e)) of
       (Right _, _) -> return ()
       (Left e, _) -> assertFailure $ "Expected this test to pass, but it failed with the message: " <> show e
 

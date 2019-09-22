@@ -12,6 +12,8 @@ module Xi (
   , typecheck
   , cute
   , ugly
+  , ignoreSource
+  , localModules
   , XP.readType
   , Module(..)
   , MVar(..)
@@ -32,16 +34,19 @@ import qualified Xi.Parser as XP
 import qualified Data.Text as T
 import qualified Data.Map as Map
 import qualified Control.Monad as CM
+import qualified Data.Text.IO as DIO
+import qualified System.FilePath.Posix as SFP
 import Data.Text.Prettyprint.Doc.Render.Terminal (putDoc)
 
 parse
   :: (Filename -> IO ()) -- ^ check existence of a source (file, URL, or whatever)
-  -> (MVar -> IO T.Text) -- ^ open a module (file, URL, or whatever)
+  -> (MVar -> IO (Maybe Filename, T.Text)) -- ^ open a module (file, URL, or whatever)
+  -> Maybe Filename
   -> T.Text -- ^ code of the current module
   -> IO [Module]
-parse checkSource loadModule code = fmap Map.elems $ parse' Map.empty code where
-  parse' :: (Map.Map MVar Module) -> T.Text -> IO (Map.Map MVar Module)
-  parse' visited code' = CM.foldM parse'' visited (XP.readProgram code')
+parse checkSource loadModule f code = fmap Map.elems $ parse' Map.empty (f, code) where
+  parse' :: (Map.Map MVar Module) -> (Maybe Filename, T.Text) -> IO (Map.Map MVar Module)
+  parse' visited (f', code') = CM.foldM parse'' visited (XP.readProgram f' code')
 
   parse'' :: (Map.Map MVar Module) -> Module -> IO (Map.Map MVar Module)
   parse'' visited m
@@ -73,3 +78,16 @@ cute (Left err) = print err
 ugly :: Either TypeError [Module] -> IO ()
 ugly (Right es) = print es
 ugly (Left err) = print err
+
+-- do not check existence of source files
+ignoreSource :: T.Text -> IO () 
+ignoreSource _ = return ()
+
+localModules :: Maybe String -> MVar -> IO (Maybe Filename, T.Text)
+localModules (Just filename) (MV f) = do
+  code <- DIO.readFile . SFP.replaceFileName filename $ (T.unpack f <> ".loc")
+  return (Just (T.pack filename), code)
+localModules Nothing (MV f) = do
+  let filename = T.unpack f <> ".loc"
+  code <- DIO.readFile filename
+  return (Just . T.pack $ filename, code)

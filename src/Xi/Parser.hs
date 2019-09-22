@@ -22,8 +22,8 @@ import qualified Data.Scientific as DS
 
 type Parser = Parsec Void T.Text
 
-readProgram :: T.Text -> [Module]
-readProgram s = case parse (sc >> pProgram <* eof) "" s of 
+readProgram :: Maybe Filename -> T.Text -> [Module]
+readProgram f s = case parse (sc >> pProgram f <* eof) (maybe "<expr>" T.unpack f) s of 
       Left err -> error (show err)
       Right es -> es
 
@@ -98,28 +98,29 @@ data ModuleBody
   | Export EVar
   | Body Expr
 
-pProgram :: Parser [Module]
-pProgram = do
-  es <- many pToplevel
+pProgram :: Maybe Filename -> Parser [Module]
+pProgram f = do
+  es <- many (pToplevel f)
   let mods = [m | (TModule m) <- es]
   case [e | (TModuleBody e) <- es] of
     [] -> return mods
-    es' -> return $ makeModule (MV "Main") es' : mods
+    es' -> return $ makeModule f (MV "Main") es' : mods
 
-pToplevel :: Parser Toplevel
-pToplevel =   try (fmap TModule pModule <* optional (symbol ";"))
-          <|> fmap TModuleBody (pModuleBody <* optional (symbol ";"))
+pToplevel :: Maybe Filename -> Parser Toplevel
+pToplevel f =   try (fmap TModule (pModule f) <* optional (symbol ";"))
+            <|> fmap TModuleBody (pModuleBody <* optional (symbol ";"))
 
-pModule :: Parser Module
-pModule = do
+pModule :: Maybe Filename -> Parser Module
+pModule f = do
   _ <- reserved "module"
   moduleName' <- name
   mes <- braces ( many1 pModuleBody)
-  return $ makeModule (MV moduleName') mes
+  return $ makeModule f (MV moduleName') mes
 
-makeModule :: MVar -> [ModuleBody] -> Module
-makeModule n mes = Module {
+makeModule :: Maybe Filename -> MVar -> [ModuleBody] -> Module
+makeModule f n mes = Module {
       moduleName = n
+    , modulePath = f
     , moduleImports = imports'
     , moduleExports = exports'
     , moduleBody = body'
