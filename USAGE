@@ -1,4 +1,4 @@
-xi version 0.1.4
+xi version 0.1.5
 
 Usage:
   xi [--type] [--raw] [--file] <code>

@@ -24,6 +24,7 @@ module Xi (
   , Property(..)
   , Constraint(..)
   , TypeError(..)
+  , TypeSet(..)
   , Filename
   , Language
 ) where
