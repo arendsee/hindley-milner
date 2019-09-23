@@ -18,6 +18,7 @@ module Xi (
   , Module(..)
   , MVar(..)
   , EVar(..)
+  , TVar(..)
   , Expr(..)
   , EType(..)
   , Type(..)
