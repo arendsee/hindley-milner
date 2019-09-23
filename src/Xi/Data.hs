@@ -127,7 +127,7 @@ data GammaIndex
 data Module = Module {
     moduleName :: MVar
   , modulePath :: Maybe Filename
-  , moduleImports :: [(MVar, EVar, Maybe EVar)]
+  , moduleImports :: [(MVar, EVar, EVar)]
   , moduleExports :: [EVar]
   , moduleBody :: [Expr]
 } deriving (Ord, Eq, Show)
@@ -275,15 +275,13 @@ instance Typed Type where
 
 importFromModularGamma :: ModularGamma -> Module -> Stack Gamma
 importFromModularGamma g m = mapM lookupImport (moduleImports m) where
-  lookupImport :: (MVar, EVar, Maybe EVar) -> Stack GammaIndex
+  lookupImport :: (MVar, EVar, EVar) -> Stack GammaIndex
   lookupImport (v, e, alias)
     | v == MV "Main" = throwError CannotImportMain
     | v == moduleName m = throwError $ SelfImport v
     | otherwise = case Map.lookup v g of
         (Just g') -> case Map.lookup e g' of
-          (Just t) -> case alias of
-            (Just a) -> return $ AnnG (VarE a) t
-            Nothing -> return $ AnnG (VarE e) t
+          (Just t) -> return $ AnnG (VarE alias) t
           Nothing -> throwError $ BadImport v e
         Nothing -> throwError $ CannotFindModule v
 
@@ -470,11 +468,11 @@ prettyBlock m
   <> vsep ["export" <+> pretty e <> line | (EV e) <- moduleExports m]
   <> vsep (map prettyExpr (moduleBody m))
 
-prettyImport :: (MVar, EVar, Maybe EVar) -> Doc AnsiStyle
-prettyImport (MV m, EV e, Just (EV alias))
-  = "from" <+> pretty m <+> "import" <+> pretty e <+> "as" <+> pretty alias <> line
-prettyImport (MV m, EV e, Nothing)
-  = "from" <+> pretty m <+> "import" <+> pretty e <> line
+prettyImport :: (MVar, EVar, EVar) -> Doc AnsiStyle
+prettyImport (MV m, EV e, EV alias)
+  | e /= alias = "from" <+> pretty m <+> "import" <+> pretty e <> line
+  | otherwise  = "from" <+> pretty m <+> "import" <+> pretty e
+               <+> "as" <+> pretty alias <> line
 
 prettyExpr :: Expr -> Doc AnsiStyle
 prettyExpr UniE = "()"

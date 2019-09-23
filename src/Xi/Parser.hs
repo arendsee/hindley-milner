@@ -93,7 +93,7 @@ data Toplevel
   | TModuleBody ModuleBody 
 
 data ModuleBody
-  = Import [(MVar, EVar, Maybe EVar)]
+  = Import [(MVar, EVar, EVar)]
   -- ^ module name, function name and optional alias
   | Export EVar
   | Body Expr
@@ -144,14 +144,14 @@ pImport = do
   _ <- reserved "import"
   n <- name
   functions <-   parens (sepBy pImportTerm (symbol ","))
-            <|>  fmap (\x -> [(EV x, Nothing)]) name
+            <|>  fmap (\x -> [(EV x, EV x)]) name
   return $ Import [(MV n, e, a) | (e, a) <- functions]
 
-pImportTerm :: Parser (EVar, Maybe EVar)
+pImportTerm :: Parser (EVar, EVar)
 pImportTerm = do
   n <- name
-  a <- optional (reserved "as" >> name)
-  return (EV n, fmap EV a)
+  a <- option n (reserved "as" >> name)
+  return (EV n, EV a)
 
 pExport :: Parser ModuleBody
 pExport = fmap (Export . EV) $ reserved "export" >> name
