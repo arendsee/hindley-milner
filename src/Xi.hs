@@ -29,6 +29,7 @@ module Xi (
 ) where
 
 import Xi.Data
+import Xi.Util
 import qualified Xi.Infer as XI 
 import qualified Xi.Parser as XP
 import qualified Data.Text as T
