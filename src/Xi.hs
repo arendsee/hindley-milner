@@ -14,6 +14,9 @@ module Xi (
   , ugly
   , ignoreSource
   , localModules
+  , prettyExpr
+  , prettyType
+  , prettyModule
   , XP.readType
   , Module(..)
   , MVar(..)
