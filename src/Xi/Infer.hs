@@ -40,9 +40,13 @@ typecheck ms = do
   case mapM (flip Map.lookup $ mods) mods' of
     (Just mods'') -> fmap reverse $ typecheckModules (Map.empty) mods''
     Nothing -> throwError UnknownError -- this shouldn't happen
+  where
+    mod2pair :: Module -> (MVar, Set.Set MVar)
+    mod2pair m = (moduleName m, Set.fromList $ map mvarFromImport (moduleImports m))
 
-mod2pair :: Module -> (MVar, Set.Set MVar)
-mod2pair m = (moduleName m, Set.fromList $ map (\(m',_,_) -> m') (moduleImports m))
+    mvarFromImport :: Import -> MVar
+    mvarFromImport (ImportAll m) = m
+    mvarFromImport (ImportSome m _) = m
 
 typecheckModules :: ModularGamma -> [Module] -> Stack [Module]
 typecheckModules _ [] = return []

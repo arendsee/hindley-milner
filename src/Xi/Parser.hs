@@ -93,10 +93,10 @@ data Toplevel
   | TModuleBody ModuleBody 
 
 data ModuleBody
-  = Import [(MVar, EVar, EVar)]
+  = MBImport Import
   -- ^ module name, function name and optional alias
-  | Export EVar
-  | Body Expr
+  | MBExport EVar
+  | MBBody Expr
 
 pProgram :: Maybe Filename -> Parser [Module]
 pProgram f = do
@@ -125,9 +125,9 @@ makeModule f n mes = Module {
     , moduleExports = exports'
     , moduleBody = body'
   } where
-  imports' = concat $ [x | (Import x) <- mes]
-  exports' = [x | (Export x) <- mes]
-  body' = [x | (Body x) <- mes]
+  imports' = [x | (MBImport x) <- mes]
+  exports' = [x | (MBExport x) <- mes]
+  body' = [x | (MBBody x) <- mes]
 
 pModuleBody :: Parser ModuleBody
 pModuleBody
@@ -136,16 +136,18 @@ pModuleBody
   <|> try pStatement' <* optional (symbol ";")
   <|> pExpr' <* optional (symbol ";")
   where
-    pStatement' = fmap Body pStatement
-    pExpr' = fmap Body pExpr
+    pStatement' = fmap MBBody pStatement
+    pExpr' = fmap MBBody pExpr
 
 pImport :: Parser ModuleBody
 pImport = do
   _ <- reserved "import"
   n <- name
-  functions <-   parens (sepBy pImportTerm (symbol ","))
-            <|>  fmap (\x -> [(EV x, EV x)]) name
-  return $ Import [(MV n, e, a) | (e, a) <- functions]
+  imports <- optional $ parens (sepBy pImportTerm (symbol ","))
+          <|> fmap (\x -> [(EV x, EV x)]) name
+  case imports of
+    (Just fs) -> return . MBImport $ ImportSome (MV n) fs
+    Nothing -> return . MBImport $ ImportAll (MV n)
 
 pImportTerm :: Parser (EVar, EVar)
 pImportTerm = do
@@ -154,7 +156,7 @@ pImportTerm = do
   return (EV n, EV a)
 
 pExport :: Parser ModuleBody
-pExport = fmap (Export . EV) $ reserved "export" >> name
+pExport = fmap (MBExport . EV) $ reserved "export" >> name
 
 pStatement :: Parser Expr
 pStatement = try pDeclaration <|> pSignature

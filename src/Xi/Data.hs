@@ -18,6 +18,7 @@ module Xi.Data
   , Gamma
   , GammaIndex(..)
   , Module(..)
+  , Import(..)
   , Filename
   , Language
   , cut
@@ -124,10 +125,15 @@ data GammaIndex
   | SrcG (EVar, Language, Maybe Filename, EVar)
   deriving(Ord, Eq, Show)
 
+data Import
+  = ImportAll MVar
+  | ImportSome MVar [(EVar, EVar)]
+  deriving(Ord, Eq, Show)
+
 data Module = Module {
     moduleName :: MVar
   , modulePath :: Maybe Filename
-  , moduleImports :: [(MVar, EVar, EVar)]
+  , moduleImports :: [Import]
   , moduleExports :: [EVar]
   , moduleBody :: [Expr]
 } deriving (Ord, Eq, Show)
@@ -274,16 +280,24 @@ instance Typed Type where
 
 
 importFromModularGamma :: ModularGamma -> Module -> Stack Gamma
-importFromModularGamma g m = mapM lookupImport (moduleImports m) where
-  lookupImport :: (MVar, EVar, EVar) -> Stack GammaIndex
-  lookupImport (v, e, alias)
+importFromModularGamma g m = fmap concat $ mapM lookupImport (moduleImports m) where
+  lookupImport :: Import -> Stack Gamma
+  lookupImport (ImportAll v)
+    | v == moduleName m = throwError $ SelfImport v
+    | otherwise = case Map.lookup v g of
+        (Just g') -> return [AnnG (VarE e) t | (e,t) <- Map.toList g'] 
+        Nothing -> throwError $ CannotFindModule v
+  lookupImport (ImportSome v imap)
     | v == MV "Main" = throwError CannotImportMain
     | v == moduleName m = throwError $ SelfImport v
     | otherwise = case Map.lookup v g of
-        (Just g') -> case Map.lookup e g' of
-          (Just t) -> return $ AnnG (VarE alias) t
-          Nothing -> throwError $ BadImport v e
+        (Just g') -> mapM (lookupOneImport v g') imap
         Nothing -> throwError $ CannotFindModule v
+
+  lookupOneImport :: MVar -> Map.Map EVar TypeSet -> (EVar, EVar) -> Stack GammaIndex 
+  lookupOneImport v typemap (n, alias) = case Map.lookup n typemap of
+    (Just t) -> return $ AnnG (VarE alias) t
+    Nothing -> throwError $ BadImport v alias
 
 extendModularGamma
   :: Gamma -- ^ context generated from typechecking this module
@@ -468,11 +482,14 @@ prettyBlock m
   <> vsep ["export" <+> pretty e <> line | (EV e) <- moduleExports m]
   <> vsep (map prettyExpr (moduleBody m))
 
-prettyImport :: (MVar, EVar, EVar) -> Doc AnsiStyle
-prettyImport (MV m, EV e, EV alias)
-  | e /= alias = "from" <+> pretty m <+> "import" <+> pretty e <> line
-  | otherwise  = "from" <+> pretty m <+> "import" <+> pretty e
-               <+> "as" <+> pretty alias <> line
+prettyImport :: Import -> Doc AnsiStyle
+prettyImport (ImportSome (MV m) imports)
+  = "import" <+> pretty m <+> encloseSep "(" ")" ", " (map prettyImportOne imports)
+  where
+    prettyImportOne (EV e, EV alias)
+      | e /= alias = pretty e
+      | otherwise  = pretty e <+> "as" <+> pretty alias
+prettyImport (ImportAll (MV m)) = "import" <+> pretty m 
 
 prettyExpr :: Expr -> Doc AnsiStyle
 prettyExpr UniE = "()"
