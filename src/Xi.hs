@@ -17,6 +17,8 @@ module Xi (
   , prettyExpr
   , prettyType
   , prettyModule
+  , fromType
+  , toType
   , XP.readType
   , Module(..)
   , MVar(..)
