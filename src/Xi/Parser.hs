@@ -145,9 +145,12 @@ pImport = do
   n <- name
   imports <- optional $ parens (sepBy pImportTerm (symbol ","))
           <|> fmap (\x -> [(EV x, EV x)]) name
-  case imports of
-    (Just fs) -> return . MBImport $ ImportSome (MV n) fs
-    Nothing -> return . MBImport $ ImportAll (MV n)
+  return . MBImport $ Import
+    { importModuleName = MV n
+    , importInclude = imports
+    , importExclude = []
+    , importNamespace = Nothing
+    }
 
 pImportTerm :: Parser (EVar, EVar)
 pImportTerm = do

@@ -42,11 +42,7 @@ typecheck ms = do
     Nothing -> throwError UnknownError -- this shouldn't happen
   where
     mod2pair :: Module -> (MVar, Set.Set MVar)
-    mod2pair m = (moduleName m, Set.fromList $ map mvarFromImport (moduleImports m))
-
-    mvarFromImport :: Import -> MVar
-    mvarFromImport (ImportAll m) = m
-    mvarFromImport (ImportSome m _) = m
+    mod2pair m = (moduleName m, Set.fromList $ map importModuleName (moduleImports m))
 
 typecheckModules :: ModularGamma -> [Module] -> Stack [Module]
 typecheckModules _ [] = return []

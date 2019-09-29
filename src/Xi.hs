@@ -61,12 +61,8 @@ parse checkSource loadModule f code = fmap Map.elems $ parse' Map.empty (f, code
     | Map.member (moduleName m) visited = return visited
     | otherwise = do
         checkSources checkSource m
-        imports <- mapM (loadModule . mvarImport) (moduleImports m)
+        imports <- mapM (loadModule . importModuleName) (moduleImports m)
         CM.foldM parse' (Map.insert (moduleName m) m visited) imports
-
-  mvarImport :: Import -> MVar
-  mvarImport (ImportAll m) = m
-  mvarImport (ImportSome m _) = m
 
 -- assert that all sourced resources exist
 checkSources :: (Filename -> IO ()) -> Module -> IO ()

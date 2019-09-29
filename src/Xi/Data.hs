@@ -125,10 +125,12 @@ data GammaIndex
   | SrcG (EVar, Language, Maybe Filename, EVar)
   deriving(Ord, Eq, Show)
 
-data Import
-  = ImportAll MVar
-  | ImportSome MVar [(EVar, EVar)]
-  deriving(Ord, Eq, Show)
+data Import = Import {
+    importModuleName :: MVar
+  , importInclude :: Maybe [(EVar, EVar)]
+  , importExclude :: [EVar]
+  , importNamespace :: Maybe EVar -- currently not used
+} deriving (Ord, Eq, Show)
 
 data Module = Module {
     moduleName :: MVar
@@ -281,23 +283,24 @@ instance Typed Type where
 
 importFromModularGamma :: ModularGamma -> Module -> Stack Gamma
 importFromModularGamma g m = fmap concat $ mapM lookupImport (moduleImports m) where
-  lookupImport :: Import -> Stack Gamma
-  lookupImport (ImportAll v)
-    | v == moduleName m = throwError $ SelfImport v
-    | otherwise = case Map.lookup v g of
-        (Just g') -> return [AnnG (VarE e) t | (e,t) <- Map.toList g'] 
-        Nothing -> throwError $ CannotFindModule v
-  lookupImport (ImportSome v imap)
-    | v == MV "Main" = throwError CannotImportMain
-    | v == moduleName m = throwError $ SelfImport v
-    | otherwise = case Map.lookup v g of
-        (Just g') -> mapM (lookupOneImport v g') imap
-        Nothing -> throwError $ CannotFindModule v
-
   lookupOneImport :: MVar -> Map.Map EVar TypeSet -> (EVar, EVar) -> Stack GammaIndex 
   lookupOneImport v typemap (n, alias) = case Map.lookup n typemap of
     (Just t) -> return $ AnnG (VarE alias) t
     Nothing -> throwError $ BadImport v alias
+
+  lookupImport :: Import -> Stack Gamma
+  lookupImport imp
+    | v == moduleName m = throwError $ SelfImport v
+    | v == MV "Main" = throwError CannotImportMain
+    | otherwise = case (importInclude imp, Map.lookup v g) of
+        -- raise error if the imported module is not in the module map
+        (_, Nothing) -> throwError $ CannotFindModule v
+        -- handle imports of everything, i.e. @import Foo@
+        (Nothing, Just g') -> return [AnnG (VarE e) t | (e,t) <- Map.toList g']
+        -- handle limited imports, i.g. @import Foo ("f" as foo, bar)@
+        (Just xs, Just g') -> mapM (lookupOneImport v g') xs
+    where
+      v = importModuleName imp
 
 extendModularGamma
   :: Gamma -- ^ context generated from typechecking this module
@@ -468,6 +471,15 @@ typeStyle = SetAnsiStyle {
     , ansiUnderlining = Just Underlined     -- Switch on underlining, or don’t do anything.
   } 
 
+instance Pretty MVar where
+  pretty (MV t) = pretty t
+
+instance Pretty EVar where
+  pretty (EV t) = pretty t
+
+instance Pretty TVar where
+  pretty (TV t) = pretty t
+
 prettyMVar :: MVar -> Doc AnsiStyle
 prettyMVar (MV x) = pretty x
 
@@ -483,13 +495,15 @@ prettyBlock m
   <> vsep (map prettyExpr (moduleBody m))
 
 prettyImport :: Import -> Doc AnsiStyle
-prettyImport (ImportSome (MV m) imports)
-  = "import" <+> pretty m <+> encloseSep "(" ")" ", " (map prettyImportOne imports)
+prettyImport imp
+  = "import" <+> pretty (importModuleName imp)
+             <+> maybe "*"
+                       (\xs -> encloseSep "(" ")" ", " (map prettyImportOne xs))
+                       (importInclude imp)
   where
     prettyImportOne (EV e, EV alias)
       | e /= alias = pretty e
       | otherwise  = pretty e <+> "as" <+> pretty alias
-prettyImport (ImportAll (MV m)) = "import" <+> pretty m 
 
 prettyExpr :: Expr -> Doc AnsiStyle
 prettyExpr UniE = "()"
